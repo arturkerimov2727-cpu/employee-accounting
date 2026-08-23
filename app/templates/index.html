@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <title>Система учёта сотрудников</title>
+  <script>
+    try {
+      document.documentElement.dataset.theme = localStorage.getItem("attendance-theme") || "light";
+    } catch (_) {
+      document.documentElement.dataset.theme = "light";
+    }
+  </script>
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
+  <script src="/static/js/app.js" defer></script>
+</head>
+<body class="auth-pending">
+  <div class="auth-gate" id="auth-gate" aria-live="polite">
+    <section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+      <span class="auth-logo">♙</span>
+      <small>ЗАКРЫТАЯ СИСТЕМА</small>
+      <h2 id="auth-title">Вход в систему</h2>
+      <p id="auth-message">Проверяем ваш доступ к панели управления</p>
+      <div class="auth-security">✓ Данные загружаются только после проверки пользователя</div>
+      <div class="auth-checking" id="auth-checking"><span class="spinner"></span><b>Проверка доступа...</b></div>
+      <button class="button primary auth-login" id="auth-login" type="button" hidden>Перейти ко входу <span>→</span></button>
+    </section>
+  </div>
+
+  <div class="app-shell" id="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Основная навигация">
+      <div class="sidebar-head">
+        <a class="brand-mark" href="#dashboard" aria-label="Система учёта сотрудников">♙</a>
+        <button class="sidebar-collapse" id="sidebar-collapse" type="button" aria-label="Свернуть меню">☰</button>
+      </div>
+      <nav class="sidebar-nav">
+        <button class="nav-item active" type="button" data-view="dashboard"><span>⌂</span><b>Дашборд</b></button>
+        <button class="nav-item" type="button" data-view="employees"><span>♙</span><b>Сотрудники</b></button>
+        <button class="nav-item" type="button" data-view="attendance"><span>◷</span><b>Посещения</b></button>
+        <button class="nav-item" type="button" data-view="reports"><span>▥</span><b>Отчёты</b></button>
+        <button class="nav-item" type="button" data-view="charts"><span>▤</span><b>Графики</b></button>
+        <button class="nav-item" type="button" data-view="departments"><span>♧</span><b>Отделы</b></button>
+        <button class="nav-item" type="button" data-view="settings"><span>⚙</span><b>Настройки</b></button>
+        <button class="nav-item" type="button" data-view="audit"><span>▣</span><b>Журнал событий</b></button>
+        <button class="nav-item admin-only" type="button" data-view="users"><span>♟</span><b>Пользователи</b></button>
+      </nav>
+      <div class="sidebar-footer">
+        <label class="theme-control" for="theme-toggle"><span><i id="theme-icon">☾</i><b>Тёмная тема</b></span><input id="theme-toggle" type="checkbox" role="switch" aria-label="Переключить тёмную тему"><em></em></label>
+        <div class="copyright">© 2026 Система учёта сотрудников<small>v1.1.0</small></div>
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <div class="topbar-title">
+          <button class="mobile-menu" id="mobile-menu" type="button" aria-label="Открыть меню">☰</button>
+          <h1 id="page-title">Система учёта сотрудников</h1>
+        </div>
+        <div class="topbar-actions">
+          <span class="today" id="today-label">▣</span>
+          <button class="notification" type="button" aria-label="Уведомления">♧<b>3</b></button>
+          <div class="account">
+            <span class="account-avatar" id="account-avatar">АК</span>
+            <span><strong id="account-name">Администратор</strong><small>Администратор</small></span>
+            <button class="account-logout" id="logout" type="button" aria-label="Выйти" title="Выйти">⌄</button>
+          </div>
+        </div>
+      </header>
+
+      <main class="content" id="app-content" tabindex="-1">
+        <section class="loading-state" aria-live="polite">
+          <span class="spinner"></span>
+          <h2>Загружаем данные</h2>
+          <p>Подготавливаем сотрудников, посещения и отчёты</p>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div class="backdrop" id="backdrop" hidden></div>
+  <aside class="drawer" id="drawer" aria-modal="true" role="dialog" hidden></aside>
+  <div class="modal" id="modal" aria-modal="true" role="dialog" hidden></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0d1420">
+  <title>Регистрация | Система учёта сотрудников</title>
+  <link rel="stylesheet" href="/static/css/auth.css">
+  <script src="/static/js/auth.js" defer></script>
+</head>
+<body data-page="register">
+  <main class="auth-layout">
+    <section class="auth-showcase register-showcase">
+      <a class="auth-brand" href="/" aria-label="На главную"><span>♙</span> WorkPoint</a>
+      <div class="showcase-copy"><small>СОЗДАНИЕ АККАУНТА</small><h1>Безопасный доступ<br>для вашей команды</h1><p>Первый зарегистрированный пользователь становится администратором. Остальные аккаунты подтверждаются им.</p></div>
+      <div class="security-note"><span>⌁</span><div><strong>Контроль доступа</strong><small>Новые заявки не видят данные до одобрения</small></div></div>
+    </section>
+    <section class="auth-form-side">
+      <button class="auth-theme" type="button" aria-label="Переключить тему">☾</button>
+      <form class="auth-form register-form" id="auth-form" novalidate>
+        <header><span class="form-icon">＋</span><small>НОВЫЙ ПОЛЬЗОВАТЕЛЬ</small><h2>Регистрация</h2><p>Создайте рабочий аккаунт</p></header>
+        <div class="form-alert" id="form-alert" hidden></div>
+        <label>Имя и фамилия<input name="full_name" autocomplete="name" placeholder="Иван Петров" minlength="3" required></label>
+        <label>Email<input name="email" type="email" autocomplete="username" placeholder="name@company.ru" required></label>
+        <label>Пароль<div class="password-field"><input name="password" type="password" autocomplete="new-password" placeholder="Минимум 10 символов" minlength="10" required><button class="show-password" type="button" aria-label="Показать пароль">◉</button></div><small class="field-hint">Заглавная и строчная буквы, цифра</small></label>
+        <label>Повторите пароль<div class="password-field"><input name="password_confirm" type="password" autocomplete="new-password" placeholder="Повторите пароль" minlength="10" required><button class="show-password" type="button" aria-label="Показать пароль">◉</button></div></label>
+        <button class="submit-button" type="submit"><span>Создать аккаунт</span><i>→</i></button>
+        <p class="auth-link">Уже есть аккаунт? <a href="/login">Войти</a></p>
+      </form>
+    </section>
+  </main>
+</body>
+</html>
