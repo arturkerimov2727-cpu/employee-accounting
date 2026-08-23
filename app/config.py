@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     session_days: int = 7
 
+    telegram_bot_token: str = ""
+
     trusted_hosts: str = "localhost,127.0.0.1"
     seed_demo_data: bool = True
 

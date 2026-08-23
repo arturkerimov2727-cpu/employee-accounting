@@ -381,8 +381,7 @@ async def run_bot(pool, settings):
         settings=settings
     )
 
-
 def start_bot(pool, settings):
-    asyncio.create_task(
+    return asyncio.create_task(
         run_bot(pool, settings)
     )

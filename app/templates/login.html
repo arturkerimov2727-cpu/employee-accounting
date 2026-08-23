@@ -9,23 +9,35 @@
   <script src="/static/js/auth.js" defer></script>
 </head>
 <body data-page="login">
+
   <main class="auth-layout">
     <section class="auth-showcase">
       <a class="auth-brand" href="/" aria-label="На главную"><span>♙</span> WorkPoint</a>
-      <div class="showcase-copy"><small>ЗАКРЫТАЯ СИСТЕМА</small><h1>Рабочее время<br>под контролем</h1><p>Единая панель для сотрудников, посещений, статистики и отчётов.</p></div>
+
+      <div class="showcase-copy">
+        <small>ЗАКРЫТАЯ СИСТЕМА</small>
+        <h1>Рабочее время<br>под контролем</h1>
+        <p>Единая панель для сотрудников, посещений, статистики и отчётов.</p>
+      </div>
+
       <div class="security-note"><span>✓</span><div><strong>Защищённый доступ</strong><small>Пароли Argon2id, HttpOnly-сессии и проверка прав</small></div></div>
     </section>
+
     <section class="auth-form-side">
       <button class="auth-theme" type="button" aria-label="Переключить тему">☾</button>
+
       <form class="auth-form" id="auth-form" novalidate>
         <header><span class="form-icon">↗</span><small>ДОБРО ПОЖАЛОВАТЬ</small><h2>Вход в систему</h2><p>Введите данные вашего рабочего аккаунта</p></header>
         <div class="form-alert" id="form-alert" hidden></div>
+
         <label>Email<input name="email" type="email" autocomplete="username" placeholder="name@company.ru" required></label>
         <label>Пароль<div class="password-field"><input name="password" type="password" autocomplete="current-password" placeholder="Введите пароль" required><button class="show-password" type="button" aria-label="Показать пароль">◉</button></div></label>
+
         <button class="submit-button" type="submit"><span>Войти</span><i>→</i></button>
         <p class="auth-link">Нет аккаунта? <a href="/register">Зарегистрироваться</a></p>
       </form>
     </section>
   </main>
+
 </body>
 </html>

@@ -5,18 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff">
   <title>Система учёта сотрудников</title>
-  <script>
-    try {
-      document.documentElement.dataset.theme = localStorage.getItem("attendance-theme") || "light";
-    } catch (_) {
-      document.documentElement.dataset.theme = "light";
-    }
-  </script>
   <link rel="stylesheet" href="/static/css/app.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
   <script src="/static/js/app.js" defer></script>
 </head>
 <body class="auth-pending">
+
   <div class="auth-gate" id="auth-gate" aria-live="polite">
     <section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-title">
       <span class="auth-logo">♙</span>
@@ -35,6 +29,7 @@
         <a class="brand-mark" href="#dashboard" aria-label="Система учёта сотрудников">♙</a>
         <button class="sidebar-collapse" id="sidebar-collapse" type="button" aria-label="Свернуть меню">☰</button>
       </div>
+
       <nav class="sidebar-nav">
         <button class="nav-item active" type="button" data-view="dashboard"><span>⌂</span><b>Дашборд</b></button>
         <button class="nav-item" type="button" data-view="employees"><span>♙</span><b>Сотрудники</b></button>
@@ -46,6 +41,7 @@
         <button class="nav-item" type="button" data-view="audit"><span>▣</span><b>Журнал событий</b></button>
         <button class="nav-item admin-only" type="button" data-view="users"><span>♟</span><b>Пользователи</b></button>
       </nav>
+
       <div class="sidebar-footer">
         <label class="theme-control" for="theme-toggle"><span><i id="theme-icon">☾</i><b>Тёмная тема</b></span><input id="theme-toggle" type="checkbox" role="switch" aria-label="Переключить тёмную тему"><em></em></label>
         <div class="copyright">© 2026 Система учёта сотрудников<small>v1.1.0</small></div>
@@ -58,30 +54,336 @@
           <button class="mobile-menu" id="mobile-menu" type="button" aria-label="Открыть меню">☰</button>
           <h1 id="page-title">Система учёта сотрудников</h1>
         </div>
+
         <div class="topbar-actions">
           <span class="today" id="today-label">▣</span>
           <button class="notification" type="button" aria-label="Уведомления">♧<b>3</b></button>
           <div class="account">
             <span class="account-avatar" id="account-avatar">АК</span>
-            <span><strong id="account-name">Администратор</strong><small>Администратор</small></span>
+            <span><strong id="account-name">Администратор</strong><small id="account-role">Администратор</small></span>
             <button class="account-logout" id="logout" type="button" aria-label="Выйти" title="Выйти">⌄</button>
           </div>
         </div>
       </header>
 
       <main class="content" id="app-content" tabindex="-1">
-        <section class="loading-state" aria-live="polite">
-          <span class="spinner"></span>
-          <h2>Загружаем данные</h2>
-          <p>Подготавливаем сотрудников, посещения и отчёты</p>
+
+        <section class="app-view" data-page="dashboard">
+          <section class="metrics">
+            <article class="metric-card green"><span class="metric-icon">♙</span><div><span>На работе</span><strong id="metric-working">0</strong><small>сейчас в офисе</small></div></article>
+            <article class="metric-card blue"><span class="metric-icon">⇥</span><div><span>Пришли сегодня</span><strong id="metric-arrived">0</strong><small>за день</small></div></article>
+            <article class="metric-card orange"><span class="metric-icon">⇤</span><div><span>Ушли сегодня</span><strong id="metric-left">0</strong><small>за день</small></div></article>
+            <article class="metric-card purple"><span class="metric-icon">◷</span><div><span>Рабочих часов</span><strong id="metric-hours">0 ч</strong><small>сегодня</small></div></article>
+          </section>
+
+          <section class="dashboard-grid">
+            <article class="panel">
+              <div class="panel-head"><h3>Рабочие часы по дням</h3><select class="input" id="chart-period"><option value="7">Последние 7 дней</option><option value="14">Последние 14 дней</option></select></div>
+              <div class="chart-wrap"><canvas id="hours-chart"></canvas></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head"><h3>Кто сейчас на работе</h3><button class="text-button" type="button" data-go="attendance">Все (<span id="working-count">0</span>) ›</button></div>
+              <div class="working-list" id="working-list"></div>
+              <div class="empty" id="working-empty" hidden>Сейчас на работе никого нет</div>
+            </article>
+          </section>
+
+          <section class="panel">
+            <div class="filters filter-set" data-filter-set="dashboard">
+              <label class="search-filter">Поиск<div class="search-control"><input data-filter="query" placeholder="Поиск по сотруднику..."><span>⌕</span></div></label>
+              <label>Сотрудник<select data-filter="employee"></select></label>
+              <label>Отдел<select data-filter="department"></select></label>
+              <label>Период<div class="split-dates"><input data-filter="from" type="date"><input data-filter="to" type="date"></div></label>
+              <label>Статус<select data-filter="status"><option value="">Все</option><option value="На работе">На работе</option><option value="Ушёл">Ушёл</option><option value="Нет данных">Нет данных</option></select></label>
+              <button class="button" type="button" data-action="reset-filters">Сбросить</button>
+              <button class="button primary" type="button" data-action="apply-filters">Применить</button>
+            </div>
+
+            <div class="employee-table-block" data-table="dashboard">
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Сотрудник</th><th>Отдел</th><th>Приход</th><th>Уход</th><th>Время</th><th>Статус</th><th></th></tr></thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+              <div class="empty" data-empty hidden>По заданным фильтрам ничего не найдено</div>
+              <div class="table-footer"><span>Показано: <b data-shown>0</b></span><span>Всего сотрудников: <b data-total>0</b></span></div>
+            </div>
+          </section>
         </section>
+
+        <section class="app-view" data-page="employees" hidden>
+          <div class="page-head"><div><h2>Сотрудники</h2><p>Карточки и контактные данные сотрудников</p></div><div class="page-actions"><button class="button primary" id="add-employee" type="button">＋ Добавить сотрудника</button></div></div>
+
+          <section class="panel">
+            <div class="filters">
+              <label class="search-filter">Поиск<div class="search-control"><input id="employee-search" placeholder="ФИО, отдел или должность"><span>⌕</span></div></label>
+              <span></span><span></span><span></span><span></span><span></span><span></span>
+            </div>
+
+            <div class="employee-table-block" data-table="employees">
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Сотрудник</th><th>Отдел</th><th>Приход</th><th>Уход</th><th>Время</th><th>Статус</th><th></th></tr></thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+              <div class="empty" data-empty hidden>По заданным фильтрам ничего не найдено</div>
+              <div class="table-footer"><span>Показано: <b data-shown>0</b></span><span>Всего сотрудников: <b data-total>0</b></span></div>
+            </div>
+          </section>
+        </section>
+
+        <section class="app-view" data-page="attendance" hidden>
+          <div class="page-head"><div><h2>Посещения</h2><p>Точный журнал приходов и уходов</p></div><div class="page-actions"><button class="button primary" id="add-event" type="button">＋ Записать событие</button></div></div>
+
+          <section class="panel">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Дата и время</th><th>Сотрудник</th><th>Отдел</th><th>Событие</th><th>Источник</th><th>Комментарий</th></tr></thead>
+                <tbody id="attendance-body"></tbody>
+              </table>
+            </div>
+            <div class="empty" id="attendance-empty" hidden>Событий пока нет</div>
+            <div class="table-footer"><span>Последние <b id="attendance-count">0</b> событий</span></div>
+          </section>
+        </section>
+
+        <section class="app-view" data-page="reports" hidden>
+          <div class="page-head"><div><h2>Отчёты</h2><p>Рабочее время за выбранный период</p></div><div class="page-actions"><button class="button" id="export-csv" type="button">↓ Экспорт CSV</button></div></div>
+
+          <section class="report-cards">
+            <article class="mini-card"><small>Всего часов</small><strong id="report-total-hours">0 ч 00 мин</strong><p id="report-period"></p></article>
+            <article class="mini-card"><small>Завершённых смен</small><strong id="report-shifts">0</strong><p>По всем сотрудникам</p></article>
+            <article class="mini-card"><small>Средняя смена</small><strong id="report-average">0 ч 00 мин</strong><p>Без незавершённых смен</p></article>
+          </section>
+
+          <section class="panel">
+            <div class="filters filter-set" data-filter-set="reports">
+              <label class="search-filter">Поиск<div class="search-control"><input data-filter="query" placeholder="Поиск по сотруднику..."><span>⌕</span></div></label>
+              <label>Сотрудник<select data-filter="employee"></select></label>
+              <label>Отдел<select data-filter="department"></select></label>
+              <label>Период<div class="split-dates"><input data-filter="from" type="date"><input data-filter="to" type="date"></div></label>
+              <label>Статус<select data-filter="status"><option value="">Все</option><option value="На работе">На работе</option><option value="Ушёл">Ушёл</option><option value="Нет данных">Нет данных</option></select></label>
+              <button class="button" type="button" data-action="reset-filters">Сбросить</button>
+              <button class="button primary" type="button" data-action="apply-filters">Применить</button>
+            </div>
+
+            <div class="employee-table-block" data-table="reports">
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Сотрудник</th><th>Отдел</th><th>Приход</th><th>Уход</th><th>Время</th><th>Статус</th><th></th></tr></thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+              <div class="empty" data-empty hidden>По заданным фильтрам ничего не найдено</div>
+              <div class="table-footer"><span>Показано: <b data-shown>0</b></span><span>Всего сотрудников: <b data-total>0</b></span></div>
+            </div>
+          </section>
+        </section>
+
+        <section class="app-view" data-page="charts" hidden>
+          <div class="page-head"><div><h2>Графики</h2><p>Динамика часов и времени прихода</p></div></div>
+          <section class="split">
+            <article class="panel"><div class="panel-head"><div><h3>Рабочие часы</h3><p>За последние 14 дней</p></div></div><div class="chart-wrap tall"><canvas id="monthly-chart"></canvas></div></article>
+            <article class="panel"><div class="panel-head"><div><h3>Среднее время</h3><p>Приход и уход по дням</p></div></div><div class="chart-wrap tall"><canvas id="time-chart"></canvas></div></article>
+          </section>
+        </section>
+
+        <section class="app-view" data-page="departments" hidden>
+          <div class="page-head"><div><h2>Отделы</h2><p>Структура организации и численность</p></div><div class="page-actions"><button class="button primary" id="add-department" type="button">＋ Добавить отдел</button></div></div>
+          <section class="department-grid" id="department-grid"></section>
+          <div class="empty" id="departments-empty" hidden>Отделов пока нет</div>
+        </section>
+
+        <section class="app-view" data-page="settings" hidden>
+          <div class="page-head"><div><h2>Настройки</h2><p>Основные параметры системы учёта</p></div></div>
+
+          <section class="panel">
+            <form class="settings-form" id="settings-form">
+              <label class="wide">Название организации<input name="organization" required></label>
+              <label>Начало рабочего дня<input name="workday_start" type="time" required></label>
+              <label>Конец рабочего дня<input name="workday_end" type="time" required></label>
+              <label class="wide">Часовой пояс<select name="timezone"><option>Europe/Moscow</option><option>Etc/UTC</option><option>Europe/Amsterdam</option></select></label>
+              <footer><button class="button primary" type="submit">Сохранить настройки</button></footer>
+            </form>
+          </section>
+        </section>
+
+        <section class="app-view" data-page="audit" hidden>
+          <div class="page-head"><div><h2>Журнал событий</h2><p>История действий администраторов</p></div></div>
+          <section class="panel">
+            <div class="audit-list" id="audit-list"></div>
+            <div class="empty" id="audit-empty" hidden>Журнал пока пуст</div>
+          </section>
+        </section>
+
+        <section class="app-view" data-page="users" hidden>
+          <section class="error-state" id="users-forbidden" hidden><h2>Недостаточно прав</h2><p>Управление пользователями доступно только администратору.</p></section>
+          <section class="loading-state" id="users-loading" hidden><span class="spinner"></span><h2>Загружаем пользователей</h2></section>
+          <section class="error-state" id="users-error" hidden><h2>Не удалось загрузить пользователей</h2><p></p></section>
+
+          <div id="users-content">
+            <div class="page-head"><div><h2>Пользователи</h2><p>Заявки на регистрацию и права доступа</p></div></div>
+
+            <section class="panel">
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Пользователь</th><th>Email</th><th>Роль</th><th>Статус</th><th>Регистрация</th><th>Действия</th></tr></thead>
+                  <tbody id="users-body"></tbody>
+                </table>
+              </div>
+              <div class="empty" id="users-empty" hidden>Пользователей пока нет</div>
+              <div class="table-footer"><span>Всего: <b id="users-total">0</b></span><span>Ожидают: <b id="users-pending">0</b></span></div>
+            </section>
+          </div>
+        </section>
+
       </main>
     </div>
   </div>
 
   <div class="backdrop" id="backdrop" hidden></div>
-  <aside class="drawer" id="drawer" aria-modal="true" role="dialog" hidden></aside>
-  <div class="modal" id="modal" aria-modal="true" role="dialog" hidden></div>
+
+  <aside class="drawer" id="drawer" aria-modal="true" role="dialog" hidden>
+    <button class="drawer-close" id="drawer-close" type="button" aria-label="Закрыть">×</button>
+
+    <section class="profile">
+      <span class="avatar" id="drawer-avatar"></span>
+      <h2 id="drawer-name"></h2>
+      <p id="drawer-position"></p>
+      <span class="status" id="drawer-status"></span>
+    </section>
+
+    <section class="detail-grid">
+      <div class="detail-cell"><small>ПРИХОД</small><strong id="drawer-in"></strong></div>
+      <div class="detail-cell"><small>УХОД</small><strong id="drawer-out"></strong></div>
+      <div class="detail-cell"><small>СЕГОДНЯ</small><strong id="drawer-today"></strong></div>
+      <div class="detail-cell"><small>ЗА МЕСЯЦ</small><strong id="drawer-month"></strong></div>
+      <div class="detail-cell"><small>ТЕЛЕФОН</small><strong id="drawer-phone"></strong></div>
+      <div class="detail-cell"><small>РАБОТАЕТ С</small><strong id="drawer-hired"></strong></div>
+    </section>
+
+    <h3>Последние смены</h3>
+    <div id="drawer-shifts"></div>
+    <div class="empty" id="drawer-shifts-empty" hidden>Смен пока нет</div>
+
+    <div class="drawer-actions">
+      <button class="button primary" id="edit-employee" type="button">✎ Изменить</button>
+      <button class="button" id="quick-event" type="button"></button>
+      <button class="button danger" id="archive-employee" type="button">В архив</button>
+    </div>
+  </aside>
+
+  <div class="modal" id="modal" aria-modal="true" role="dialog" hidden>
+    <section class="modal-panel" data-modal="employee" hidden>
+      <div class="modal-head"><h2 id="employee-modal-title">Новый сотрудник</h2><button class="icon-button modal-close" type="button">×</button></div>
+
+      <form class="form-grid" id="employee-form">
+        <label class="wide">ФИО<input name="fullName" required></label>
+        <label>Отдел<select name="departmentId" required><option value="">Выберите отдел</option></select></label>
+        <label>Должность<input name="position" required></label>
+        <label>Телефон<input name="phone" placeholder="+7 ..."></label>
+        <label>Дата приёма<input name="hiredAt" type="date" required></label>
+        <div class="form-actions"><button class="button modal-close" type="button">Отмена</button><button class="button primary" type="submit">Сохранить</button></div>
+      </form>
+    </section>
+
+    <section class="modal-panel" data-modal="event" hidden>
+      <div class="modal-head"><h2>Записать посещение</h2><button class="icon-button modal-close" type="button">×</button></div>
+
+      <form class="form-grid" id="event-form">
+        <label class="wide">Сотрудник<select name="employeeId" required><option value="">Выберите сотрудника</option></select></label>
+        <label>Событие<select name="eventType"><option value="IN">Приход</option><option value="OUT">Уход</option></select></label>
+        <label>Дата и время<input name="eventTime" type="datetime-local" required></label>
+        <label class="wide">Комментарий<textarea name="comment" placeholder="Причина ручной корректировки"></textarea></label>
+        <div class="form-actions"><button class="button modal-close" type="button">Отмена</button><button class="button primary" type="submit">Записать</button></div>
+      </form>
+    </section>
+
+    <section class="modal-panel" data-modal="department" hidden>
+      <div class="modal-head"><h2>Новый отдел</h2><button class="icon-button modal-close" type="button">×</button></div>
+
+      <form class="form-grid" id="department-form">
+        <label class="wide">Название отдела<input name="name" required placeholder="Например, Юридический отдел"></label>
+        <div class="form-actions"><button class="button modal-close" type="button">Отмена</button><button class="button primary" type="submit">Создать</button></div>
+      </form>
+    </section>
+  </div>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <template id="employee-row-template">
+    <tr class="clickable" data-employee-id="">
+      <td><span class="employee-cell"><span class="avatar" data-avatar></span><span><strong data-name></strong><small data-position></small></span></span></td>
+      <td data-department></td>
+      <td data-in></td>
+      <td data-out></td>
+      <td data-duration></td>
+      <td><span class="status" data-status></span></td>
+      <td><button class="icon-button" type="button" aria-label="Открыть карточку">•••</button></td>
+    </tr>
+  </template>
+
+  <template id="working-row-template">
+    <button class="working-row" type="button" data-employee-id="">
+      <span class="avatar" data-avatar></span>
+      <span><strong data-name></strong><small data-department></small></span>
+      <span class="working-time"><strong data-time></strong><small>Пришёл</small></span>
+      <i class="working-dot"></i>
+    </button>
+  </template>
+
+  <template id="attendance-row-template">
+    <tr class="clickable" data-employee-id="">
+      <td data-time></td>
+      <td><span class="employee-cell"><span class="avatar" data-avatar></span><strong data-name></strong></span></td>
+      <td data-department></td>
+      <td><span class="status" data-event></span></td>
+      <td data-source></td>
+      <td data-comment></td>
+    </tr>
+  </template>
+
+  <template id="department-card-template">
+    <article class="mini-card department-card"><span class="metric-icon">♧</span><div><small>Подразделение</small><strong data-name></strong><p><span data-count></span> сотрудников</p></div></article>
+  </template>
+
+  <template id="audit-item-template">
+    <article class="audit-item">
+      <time><span data-date></span><br><span data-time></span></time>
+      <div><strong data-details></strong><small data-entity></small></div>
+      <div class="audit-actions"><small data-actor></small><button class="button success audit-approve" type="button" data-approve hidden>Одобрить</button></div>
+    </article>
+  </template>
+
+  <template id="user-row-template">
+    <tr>
+      <td><span class="employee-cell"><span class="avatar" data-avatar></span><strong data-name></strong></span></td>
+      <td data-email></td>
+      <td>
+        <select class="user-role" data-role>
+          <option value="viewer">Наблюдатель</option>
+          <option value="manager">Руководитель</option>
+          <option value="admin">Администратор</option>
+        </select>
+      </td>
+      <td><span class="status" data-status></span></td>
+      <td data-created></td>
+      <td>
+        <div class="user-actions">
+          <button class="button user-update" type="button" data-save>Сохранить роль</button>
+          <button class="button success user-update" type="button" data-approve>Одобрить</button>
+          <button class="button danger user-update" type="button" data-disable>Отключить</button>
+        </div>
+      </td>
+    </tr>
+  </template>
+
+  <template id="shift-row-template">
+    <p class="shift-row"><span data-date></span><strong data-time></strong></p>
+  </template>
+
 </body>
 </html>
