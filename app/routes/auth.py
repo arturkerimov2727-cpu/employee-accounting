@@ -15,7 +15,7 @@ from ..security import (
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-def public_user(user: AuthContext) -> dict:
+def public_user(user):
     return {"id": user.user_id, "name": user.full_name, "email": user.email, "role": user.role}
 
 

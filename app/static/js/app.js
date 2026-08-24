@@ -38,6 +38,7 @@ const titles = {
   attendance: "Посещения",
   reports: "Отчёты",
   charts: "Графики",
+  lateness: "Опоздания",
   departments: "Отделы",
   settings: "Настройки",
   audit: "Журнал событий",
@@ -379,6 +380,11 @@ function renderDashboard() {
   document.querySelector("#metric-arrived").textContent = arrived.length;
   document.querySelector("#metric-left").textContent = left.length;
   document.querySelector("#metric-hours").textContent = `${Math.round(totalMinutes / 60)} ч`;
+  const dashboard = state.data.dashboard || {};
+  document.querySelector("#metric-late").textContent = dashboard.lateToday || 0;
+  document.querySelector("#metric-absent").textContent = dashboard.absent || 0;
+  document.querySelector("#metric-open-shifts").textContent = dashboard.openShifts || 0;
+  document.querySelector("#metric-employees").textContent = dashboard.totalEmployees || state.data.employees.length;
   document.querySelector("#working-count").textContent = working.length;
 
   const list = document.querySelector("#working-list");
@@ -405,7 +411,9 @@ function renderDashboard() {
 
   syncFilterSet("dashboard");
   renderEmployeeTable("dashboard", filteredRows());
-  drawHoursChart(Number(document.querySelector("#chart-period").value || 7));
+  const days = lastDays(Number(document.querySelector("#chart-period").value || 7));
+  const chart = AttendanceCharts.drawHoursChart("hours-chart", days, days.map((day) => totalForDay(day) / 60));
+  if (chart) state.charts.push(chart);
 }
 
 
@@ -491,30 +499,10 @@ function renderReports() {
 
 function renderCharts() {
   const days = lastDays(14);
-
-  makeChart("monthly-chart", "bar", days.map(shortDay), [{
-    label: "Часы",
-    data: days.map((day) => Math.round((totalForDay(day) / 60) * 10) / 10),
-    backgroundColor: cssVar("--chart-blue"),
-    borderRadius: 5
-  }]);
-
-  makeChart("time-chart", "line", days.map(shortDay), [
-    {
-      label: "Приход",
-      data: days.map((day) => averageEventMinutes(day, "IN")),
-      borderColor: cssVar("--chart-green"),
-      backgroundColor: cssVar("--chart-green-soft"),
-      tension: 0.35
-    },
-    {
-      label: "Уход",
-      data: days.map((day) => averageEventMinutes(day, "OUT")),
-      borderColor: cssVar("--chart-orange"),
-      backgroundColor: cssVar("--chart-orange-soft"),
-      tension: 0.35
-    }
-  ], { timeAxis: true });
+  const charts = AttendanceCharts.drawAttendanceCharts(
+    "monthly-chart", "time-chart", days, days.map((day) => totalForDay(day) / 60), state.data.events
+  );
+  state.charts.push(...charts);
 }
 
 
@@ -715,6 +703,7 @@ function render() {
     attendance: renderAttendance,
     reports: renderReports,
     charts: renderCharts,
+    lateness: renderLateness,
     departments: renderDepartments,
     settings: renderSettings,
     audit: renderAudit,
@@ -776,6 +765,7 @@ function showEmployee(id) {
   quick.dataset.eventType = atWork ? "OUT" : "IN";
 
   openOverlay("drawer");
+  loadEmployeeInsights(id);
 }
 
 
@@ -805,6 +795,7 @@ function openEmployeeModal(employee = null) {
   form.elements.fullName.value = employee?.fullName || "";
   form.elements.position.value = employee?.position || "";
   form.elements.phone.value = employee?.phone || "";
+  form.elements.telegramId.value = employee?.telegramId || "";
   form.elements.hiredAt.value = employee?.hiredAt || todayKey;
 
   openOverlay("modal");
@@ -895,138 +886,6 @@ function switchView(view) {
 }
 
 
-function shortDay(day) {
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "2-digit",
-    month: "short",
-    timeZone: "UTC"
-  }).format(new Date(`${day}T12:00:00Z`));
-}
-
-
-function cssVar(name) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
-
-
-function drawHoursChart(count) {
-  const days = lastDays(count);
-
-  makeChart(
-    "hours-chart",
-    "bar",
-    days.map((day) =>
-      new Intl.DateTimeFormat("ru-RU", {
-        day: "2-digit",
-        month: "short",
-        weekday: "short",
-        timeZone: "UTC"
-      }).format(new Date(`${day}T12:00:00Z`))
-    ),
-    [{
-      label: "Рабочие часы",
-      data: days.map((day) => Math.round(totalForDay(day) / 60)),
-      backgroundColor: days.map((_, index) =>
-        index === days.length - 1
-          ? cssVar("--chart-blue")
-          : cssVar("--chart-blue-soft")
-      ),
-      borderRadius: 5
-    }]
-  );
-}
-
-
-function averageEventMinutes(day, eventType) {
-  const values = state.data.events
-    .filter((event) =>
-      event.eventType === eventType &&
-      event.eventTime.slice(0, 10) === day
-    )
-    .map((event) => {
-      const [hour, minute] = event.eventTime.slice(11, 16).split(":").map(Number);
-      return hour * 60 + minute;
-    });
-
-  if (!values.length) return null;
-
-  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
-}
-
-
-function makeChart(id, type, labels, datasets, options = {}) {
-  const canvas = document.querySelector(`#${id}`);
-
-  if (!canvas || typeof Chart === "undefined") return;
-
-  const chart = new Chart(canvas, {
-    type,
-
-    data: {
-      labels,
-      datasets
-    },
-
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-
-      interaction: {
-        intersect: false,
-        mode: "index"
-      },
-
-      plugins: {
-        legend: {
-          display: datasets.length > 1,
-          labels: {
-            boxWidth: 10,
-            font: { size: 10 }
-          }
-        },
-
-        tooltip: {
-          callbacks: options.timeAxis ? {
-            label: (context) =>
-              `${context.dataset.label}: ` +
-              `${String(Math.floor(context.raw / 60)).padStart(2, "0")}:` +
-              `${String(context.raw % 60).padStart(2, "0")}`
-          } : {}
-        }
-      },
-
-      scales: {
-        x: {
-          grid: { display: false },
-          ticks: {
-            color: cssVar("--chart-text"),
-            font: { size: 9 }
-          }
-        },
-
-        y: {
-          beginAtZero: !options.timeAxis,
-          min: options.timeAxis ? 420 : undefined,
-          max: options.timeAxis ? 1200 : undefined,
-          grid: { color: cssVar("--chart-grid") },
-
-          ticks: {
-            color: cssVar("--chart-text"),
-            font: { size: 9 },
-
-            callback: options.timeAxis
-              ? (value) => `${String(Math.floor(value / 60)).padStart(2, "0")}:00`
-              : undefined
-          }
-        }
-      }
-    }
-  });
-
-  state.charts.push(chart);
-}
-
-
 function exportCsv(rows) {
   const cells = [
     ["Сотрудник", "Отдел", "Период", "Часы"],
@@ -1091,6 +950,49 @@ async function api(payload, successMessage) {
     showToast(error.message || "Ошибка", true);
     throw error;
   }
+}
+
+
+async function loadEmployeeInsights(employeeId, period = "month") {
+  try {
+    const [summaryResponse, calendarResponse, scheduleResponse] = await Promise.all([
+      fetch(`/api/attendance/employees/${employeeId}/summary?period=${period}`),
+      fetch(`/api/attendance/employees/${employeeId}/calendar`),
+      fetch(`/api/attendance/employees/${employeeId}/schedule`)
+    ]);
+    const [summary, calendar, schedule] = await Promise.all([summaryResponse.json(), calendarResponse.json(), scheduleResponse.json()]);
+    if (!summaryResponse.ok || !calendarResponse.ok || !scheduleResponse.ok) throw new Error(summary.detail || calendar.detail || "Не удалось загрузить статистику");
+    const stats = summary.statistics;
+    const cells = [["Смен", stats.shifts], ["Время", durationLabel(stats.workedMinutes)], ["Опоздания", `${stats.lateCount} / ${stats.lateMinutes} мин`], ["Ранние уходы", `${stats.earlyLeaveCount} / ${stats.earlyLeaveMinutes} мин`], ["Переработка", durationLabel(stats.overtimeMinutes)], ["Отсутствия", stats.approvedAbsences]];
+    document.querySelector("#employee-stats").innerHTML = cells.map(([name, value]) => `<div class="detail-cell"><small>${name}</small><strong>${value}</strong></div>`).join("");
+    document.querySelector("#employee-calendar").innerHTML = calendar.days.map((day) => `<button class="calendar-day ${day.state}${day.lateMinutes ? " late" : ""}${day.earlyLeaveMinutes ? " early" : ""}" title="${day.date}: ${day.absenceLabel || day.state}" type="button">${Number(day.date.slice(-2))}</button>`).join("");
+    const names = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+    document.querySelector("#employee-schedule").innerHTML = schedule.schedule.map((row) => `<div class="schedule-row-preview"><span>${names[row.weekday]}</span><b>${row.isWorkday ? `${row.startsAt}–${row.endsAt}` : "Выходной"}</b></div>`).join("");
+  } catch (error) {
+    document.querySelector("#employee-stats").textContent = error.message || "Нет данных";
+  }
+}
+
+
+async function renderLateness() {
+  const from = document.querySelector("#lateness-from");
+  const to = document.querySelector("#lateness-to");
+  from.value ||= monthStart;
+  to.value ||= todayKey;
+  const response = await fetch(`/api/attendance/analytics/lateness?from=${from.value}&to=${to.value}`);
+  const data = await response.json();
+  if (!response.ok) { showToast(data.detail || "Не удалось загрузить аналитику", true); return; }
+  const body = document.querySelector("#lateness-body");
+  body.innerHTML = data.rows.map((row) => `<tr><td>${row.fullName}</td><td>${row.department}</td><td>${row.lateCount}</td><td>${durationLabel(row.lateMinutes)}</td><td>${durationLabel(row.averageLateMinutes)}</td><td>${durationLabel(row.overtimeMinutes)}</td></tr>`).join("");
+  document.querySelector("#lateness-empty").hidden = data.rows.length > 0;
+}
+
+
+function exportServerReport(format) {
+  const params = new URLSearchParams({ from: state.filters.from, to: state.filters.to });
+  if (state.filters.employee) params.set("employee_id", state.filters.employee);
+  if (state.filters.department) params.set("department_id", state.filters.department);
+  window.location.assign(`/api/attendance/export/${format}?${params}`);
 }
 
 
@@ -1299,7 +1201,11 @@ document.querySelector("#chart-period").addEventListener("change", (event) => {
   state.charts.forEach((chart) => chart.destroy());
   state.charts = [];
 
-  drawHoursChart(Number(event.target.value));
+  state.charts.forEach((chart) => chart.destroy());
+  state.charts = [];
+  const days = lastDays(Number(event.target.value));
+  const chart = AttendanceCharts.drawHoursChart("hours-chart", days, days.map((day) => totalForDay(day) / 60));
+  if (chart) state.charts.push(chart);
 });
 
 
@@ -1349,8 +1255,11 @@ document.querySelector("[data-go='attendance']").addEventListener("click", () =>
 
 
 document.querySelector("#export-csv").addEventListener("click", () => {
-  exportCsv(filteredRows());
+  exportServerReport("csv");
 });
+document.querySelector("#export-xlsx").addEventListener("click", () => exportServerReport("xlsx"));
+document.querySelector("#export-pdf").addEventListener("click", () => exportServerReport("pdf"));
+document.querySelector("#load-lateness").addEventListener("click", renderLateness);
 
 
 document.querySelector("#settings-form").addEventListener("submit", async (event) => {
@@ -1370,6 +1279,8 @@ document.querySelector("#employee-form").addEventListener("submit", async (event
 
   const values = Object.fromEntries(new FormData(event.currentTarget));
   const employee = state.editingEmployee;
+  if (!values.telegramId) delete values.telegramId;
+  else values.telegramId = Number(values.telegramId);
 
   await api({
     action: employee ? "updateEmployee" : "createEmployee",
@@ -1418,6 +1329,51 @@ document.querySelector("#edit-employee").addEventListener("click", () => {
   const employee = state.data.employees.find((item) => Number(item.id) === id);
 
   if (employee) openEmployeeModal(employee);
+});
+
+document.querySelector("#employee-period").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-period]");
+  if (!button || !dom.drawer.dataset.employeeId) return;
+  document.querySelectorAll("#employee-period [data-period]").forEach((item) => item.classList.toggle("active", item === button));
+  loadEmployeeInsights(Number(dom.drawer.dataset.employeeId), button.dataset.period);
+});
+
+document.querySelector("#edit-schedule").addEventListener("click", async () => {
+  const employeeId = Number(dom.drawer.dataset.employeeId);
+  if (!employeeId) return;
+  const response = await fetch(`/api/attendance/employees/${employeeId}/schedule`);
+  const data = await response.json();
+  if (!response.ok) return showToast(data.detail || "Не удалось загрузить график", true);
+  const names = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
+  document.querySelector("#schedule-fields").innerHTML = data.schedule.map((row) => `<label class="schedule-editor-row"><span>${names[row.weekday]}</span><input type="checkbox" data-workday ${row.isWorkday ? "checked" : ""}><input type="time" data-start value="${row.startsAt || "09:00"}"><input type="time" data-end value="${row.endsAt || "18:00"}></label>`).join("");
+  showModalPanel("schedule"); openOverlay("modal");
+});
+
+document.querySelector("#schedule-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const employeeId = Number(dom.drawer.dataset.employeeId);
+  const schedule = [...document.querySelectorAll("#schedule-fields .schedule-editor-row")].map((row, weekday) => ({ weekday, isWorkday: row.querySelector("[data-workday]").checked, startsAt: row.querySelector("[data-start]").value, endsAt: row.querySelector("[data-end]").value }));
+  const response = await fetch(`/api/attendance/employees/${employeeId}/schedule`, { method: "PUT", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken() }, body: JSON.stringify({ schedule }) });
+  const data = await response.json();
+  if (!response.ok) return showToast(data.detail || "Не удалось сохранить график", true);
+  closeOverlay(); showToast("График сохранён"); loadEmployeeInsights(employeeId);
+});
+
+document.querySelector("#add-absence").addEventListener("click", () => {
+  document.querySelector("#absence-form").reset();
+  document.querySelector("#absence-form").elements.startsOn.value = todayKey;
+  document.querySelector("#absence-form").elements.endsOn.value = todayKey;
+  showModalPanel("absence"); openOverlay("modal");
+});
+
+document.querySelector("#absence-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const values = Object.fromEntries(new FormData(event.currentTarget));
+  values.employeeId = Number(dom.drawer.dataset.employeeId);
+  const response = await fetch("/api/attendance/absences", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken() }, body: JSON.stringify(values) });
+  const data = await response.json();
+  if (!response.ok) return showToast(data.detail || "Не удалось сохранить отсутствие", true);
+  closeOverlay(); showToast(data.message); loadEmployeeInsights(values.employeeId);
 });
 
 

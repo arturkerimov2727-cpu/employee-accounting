@@ -34,9 +34,38 @@ CREATE TABLE IF NOT EXISTS employees (
   department_id BIGINT NOT NULL REFERENCES departments(id),
   position VARCHAR(120) NOT NULL DEFAULT 'Сотрудник',
   phone VARCHAR(40) NOT NULL DEFAULT '',
+  telegram_id BIGINT UNIQUE,
   hired_at DATE NOT NULL,
   active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS telegram_id BIGINT;
+CREATE UNIQUE INDEX IF NOT EXISTS employees_telegram_unique_idx ON employees(telegram_id) WHERE telegram_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS employee_schedules (
+  id BIGSERIAL PRIMARY KEY,
+  employee_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  weekday SMALLINT NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+  is_workday BOOLEAN NOT NULL DEFAULT TRUE,
+  starts_at TIME,
+  ends_at TIME,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (employee_id, weekday),
+  CHECK ((is_workday = FALSE AND starts_at IS NULL AND ends_at IS NULL)
+      OR (is_workday = TRUE AND starts_at IS NOT NULL AND ends_at IS NOT NULL AND ends_at > starts_at))
+);
+
+CREATE TABLE IF NOT EXISTS employee_absences (
+  id BIGSERIAL PRIMARY KEY,
+  employee_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  absence_type VARCHAR(24) NOT NULL CHECK (absence_type IN ('vacation', 'sick_leave', 'business_trip', 'approved_absence')),
+  starts_on DATE NOT NULL,
+  ends_on DATE NOT NULL,
+  comment VARCHAR(500) NOT NULL DEFAULT '',
+  created_by VARCHAR(254) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (ends_on >= starts_on)
 );
 
 CREATE TABLE IF NOT EXISTS attendance_events (
@@ -69,6 +98,9 @@ CREATE TABLE IF NOT EXISTS settings (
 CREATE INDEX IF NOT EXISTS sessions_token_idx ON sessions(token_hash);
 CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS employees_department_idx ON employees(department_id);
+CREATE INDEX IF NOT EXISTS employees_telegram_idx ON employees(telegram_id);
+CREATE INDEX IF NOT EXISTS employee_schedules_employee_idx ON employee_schedules(employee_id, weekday);
+CREATE INDEX IF NOT EXISTS employee_absences_employee_date_idx ON employee_absences(employee_id, starts_on, ends_on);
 CREATE INDEX IF NOT EXISTS attendance_employee_time_idx ON attendance_events(employee_id, event_time DESC);
 CREATE INDEX IF NOT EXISTS attendance_time_idx ON attendance_events(event_time DESC);
 CREATE INDEX IF NOT EXISTS audit_created_idx ON audit_log(created_at DESC);

@@ -9,7 +9,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .config import get_settings
 from .database import create_pool, initialize_database
-from .routes import auth, system, users
+from .routes import attendance, auth, miniapp, system, users
 
 from app.bot.bot import start_bot
 
@@ -20,6 +20,7 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.pool = await create_pool(settings)
+    app.state.settings = settings
     await initialize_database(app.state.pool)
 
     app.state.bot_task = start_bot(
@@ -56,6 +57,8 @@ templates = Jinja2Templates(directory=BASE_DIR / "templates")
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(system.router)
+app.include_router(attendance.router)
+app.include_router(miniapp.router)
 
 
 @app.middleware("http")
@@ -75,19 +78,21 @@ async def security_headers(request: Request, call_next):
     response = await call_next(request)
 
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
+    if request.url.path != "/miniapp":
+        response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "same-origin"
     response.headers["Permissions-Policy"] = (
         "camera=(), microphone=(), geolocation=()"
     )
 
+    frame_ancestors = "https://web.telegram.org https://*.telegram.org" if request.url.path == "/miniapp" else "'none'"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://telegram.org; "
         "style-src 'self'; "
         "img-src 'self' data:; "
         "connect-src 'self'; "
-        "frame-ancestors 'none'"
+        f"frame-ancestors {frame_ancestors}"
     )
 
     response.headers["Cache-Control"] = "private, no-store"
@@ -122,3 +127,8 @@ async def register_page(request: Request):
         request=request,
         name="register.html",
     )
+
+
+@app.get("/miniapp", response_class=HTMLResponse)
+async def miniapp_page(request: Request):
+    return templates.TemplateResponse(request=request, name="mini_app/index_mini_app.html")

@@ -4,23 +4,15 @@ from asyncpg import UniqueViolationError
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from ..dependencies import AuthContext, get_pool, require_csrf_roles, require_roles
+from ..services.attendance import attendance_days, ensure_default_schedule, record_attendance_event, write_audit
 from app.schemas.schemas import SystemAction
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
-
-async def write_audit(connection, actor: str, action: str, entity_type: str, entity_id: int | None, details: str):
-    await connection.execute(
-        """INSERT INTO audit_log (actor, action, entity_type, entity_id, details)
-           VALUES ($1, $2, $3, $4, $5)""",
-        actor, action, entity_type, entity_id, details,
-    )
-
-
-async def snapshot(pool, user: AuthContext) -> dict:
+async def snapshot(pool, user):
     employees = await pool.fetch(
         """SELECT e.id, e.full_name, e.department_id, d.name AS department,
-                  e.position, e.phone, e.hired_at, e.active
+                  e.position, e.phone, e.hired_at, e.active, e.telegram_id
            FROM employees e JOIN departments d ON d.id = e.department_id
            WHERE e.active = TRUE ORDER BY e.full_name"""
     )
@@ -41,11 +33,23 @@ async def snapshot(pool, user: AuthContext) -> dict:
            FROM audit_log ORDER BY created_at DESC LIMIT 200"""
     )
     setting_rows = await pool.fetch("SELECT key, value FROM settings")
+    settings = {row["key"]: row["value"] for row in setting_rows}
+    today = datetime.now().date()
+    dashboard_days = [
+        (await attendance_days(pool, employee["id"], today, today, settings.get("timezone")))[0]
+        for employee in employees
+    ]
+    month_start = today.replace(day=1)
+    month_days = [
+        await attendance_days(pool, employee["id"], month_start, today, settings.get("timezone"))
+        for employee in employees
+    ]
     return {
         "employees": [{
             "id": row["id"], "fullName": row["full_name"], "departmentId": row["department_id"],
             "department": row["department"], "position": row["position"], "phone": row["phone"],
             "hiredAt": row["hired_at"].isoformat(), "active": row["active"],
+            "telegramId": row["telegram_id"],
         } for row in employees],
         "departments": [{"id": row["id"], "name": row["name"], "employeeCount": row["employee_count"]} for row in departments],
         "events": [{
@@ -59,7 +63,14 @@ async def snapshot(pool, user: AuthContext) -> dict:
             "entityType": row["entity_type"], "entityId": row["entity_id"], "details": row["details"],
             "createdAt": row["created_at"].astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
         } for row in audit],
-        "settings": {row["key"]: row["value"] for row in setting_rows},
+        "settings": settings,
+        "dashboard": {
+            "totalEmployees": len(employees),
+            "lateToday": sum(day["lateMinutes"] > 0 for day in dashboard_days),
+            "absent": sum(day["state"] == "absent" for day in dashboard_days),
+            "openShifts": sum(day["state"] == "open_shift" for day in dashboard_days),
+            "monthOvertimeMinutes": sum(day["overtimeMinutes"] for days in month_days for day in days),
+        },
         "user": {"id": user.user_id, "name": user.full_name, "email": user.email, "role": user.role},
     }
 
@@ -89,19 +100,35 @@ async def mutate_system(
                         payload.fullName.strip(), payload.departmentId, (payload.position or "Сотрудник").strip(),
                         (payload.phone or "").strip(), payload.hiredAt or datetime.now().date().isoformat(),
                     )
+                    await ensure_default_schedule(connection, employee_id)
                     await write_audit(connection, user.email, "CREATE", "employee", employee_id, f"Добавлен сотрудник: {payload.fullName.strip()}")
                 elif action == "updateEmployee":
                     if not payload.id or not payload.fullName or not payload.departmentId:
                         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Недостаточно данных")
+                    before = await connection.fetchrow(
+                        """SELECT full_name, department_id, position, phone, hired_at, telegram_id
+                           FROM employees WHERE id=$1 AND active=TRUE FOR UPDATE""", payload.id,
+                    )
+                    if not before:
+                        raise HTTPException(status.HTTP_404_NOT_FOUND, "Сотрудник не найден")
                     result = await connection.execute(
-                        """UPDATE employees SET full_name=$1, department_id=$2, position=$3, phone=$4, hired_at=$5::date
-                           WHERE id=$6 AND active=TRUE""",
+                        """UPDATE employees SET full_name=$1, department_id=$2, position=$3, phone=$4, hired_at=$5::date,
+                           telegram_id=$6 WHERE id=$7 AND active=TRUE""",
                         payload.fullName.strip(), payload.departmentId, (payload.position or "Сотрудник").strip(),
-                        (payload.phone or "").strip(), payload.hiredAt, payload.id,
+                        (payload.phone or "").strip(), payload.hiredAt, payload.telegramId, payload.id,
                     )
                     if result.endswith(" 0"):
                         raise HTTPException(status.HTTP_404_NOT_FOUND, "Сотрудник не найден")
                     await write_audit(connection, user.email, "UPDATE", "employee", payload.id, f"Обновлены данные: {payload.fullName.strip()}")
+                    changes = []
+                    fields = {"ФИО": (before["full_name"], payload.fullName.strip()), "Должность": (before["position"], (payload.position or "Сотрудник").strip()), "Телефон": (before["phone"], (payload.phone or "").strip()), "Telegram ID": (before["telegram_id"], payload.telegramId)}
+                    for label, (old, new) in fields.items():
+                        if str(old or "") != str(new or ""):
+                            changes.append(f"{label}: {old or '—'} → {new or '—'}")
+                    if before["department_id"] != payload.departmentId:
+                        changes.append("Изменён отдел")
+                    if changes:
+                        await write_audit(connection, user.email, "EMPLOYEE_HISTORY", "employee", payload.id, "; ".join(changes))
                 elif action == "archiveEmployee":
                     if not payload.id:
                         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Не указан сотрудник")
@@ -116,25 +143,10 @@ async def mutate_system(
                 elif action == "addEvent":
                     if not payload.employeeId or payload.eventType not in {"IN", "OUT"}:
                         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Некорректное событие")
-                    event_time = payload.eventTime or datetime.now(timezone.utc)
-                    last = await connection.fetchval(
-                        """SELECT event_type FROM attendance_events
-                           WHERE employee_id=$1 AND event_time::date=$2::date
-                           ORDER BY event_time DESC LIMIT 1""",
-                        payload.employeeId, event_time.date(),
+                    await record_attendance_event(
+                        connection, payload.employeeId, payload.eventType, user.email, "WEB",
+                        payload.eventTime or datetime.now(timezone.utc), payload.comment,
                     )
-                    if last == payload.eventType:
-                        message = "Приход уже отмечен" if payload.eventType == "IN" else "Уход уже отмечен"
-                        raise HTTPException(status.HTTP_409_CONFLICT, message)
-                    if payload.eventType == "OUT" and last != "IN":
-                        raise HTTPException(status.HTTP_409_CONFLICT, "Сначала отметьте приход")
-                    event_id = await connection.fetchval(
-                        """INSERT INTO attendance_events (employee_id, event_type, event_time, source, comment, created_by)
-                           VALUES ($1, $2, $3, 'WEB', $4, $5) RETURNING id""",
-                        payload.employeeId, payload.eventType, event_time, payload.comment.strip(), user.email,
-                    )
-                    label = "Приход" if payload.eventType == "IN" else "Уход"
-                    await write_audit(connection, user.email, payload.eventType, "attendance", event_id, f"{label}: сотрудник #{payload.employeeId}")
                 elif action == "updateSettings":
                     if user.role != "admin":
                         raise HTTPException(status.HTTP_403_FORBIDDEN, "Настройки доступны только администратору")

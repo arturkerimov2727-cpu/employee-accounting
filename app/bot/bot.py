@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import asyncio
 
 from aiogram import Bot, Dispatcher, F, Router
+from fastapi import HTTPException
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandStart
@@ -11,6 +12,7 @@ from aiogram.fsm.state import State, StatesGroup
 
 from app.bot.buttons.employee_buttons import employee_keyboard, search_keyboard
 from app.bot.keyboards.main_keyboard import main_keyboard
+from app.services.attendance import record_attendance_event
 
 
 logger = logging.getLogger(__name__)
@@ -111,7 +113,7 @@ async def start_bot(message, settings):
 
     await message.answer(
         "Откройте поиск сотрудника.",
-        reply_markup=main_keyboard()
+        reply_markup=main_keyboard(settings.telegram_mini_app_url)
     )
 
 
@@ -261,77 +263,13 @@ async def mark_attendance(
 
         async with connection.transaction():
 
-            employee = await connection.fetchrow(
-                """
-                SELECT full_name
-
-                FROM employees
-
-                WHERE id = $1
-                  AND active = TRUE
-
-                FOR UPDATE
-                """,
-                employee_id
-            )
-
-            if not employee:
-
-                await callback.answer(
-                    "Сотрудник не найден",
-                    show_alert=True
+            try:
+                await record_attendance_event(
+                    connection, employee_id, event_type, str(callback.from_user.id), "TELEGRAM", now,
                 )
+            except HTTPException as error:
+                await callback.answer(error.detail, show_alert=True)
                 return
-
-            last_event = await connection.fetchval(
-                """
-                SELECT event_type
-
-                FROM attendance_events
-
-                WHERE employee_id = $1
-                  AND event_time::date = CURRENT_DATE
-
-                ORDER BY event_time DESC
-
-                LIMIT 1
-                """,
-                employee_id
-            )
-
-            if event_type == "IN" and last_event == "IN":
-
-                await callback.answer(
-                    "Сотрудник уже на работе",
-                    show_alert=True
-                )
-                return
-
-            if event_type == "OUT" and last_event != "IN":
-
-                await callback.answer(
-                    "Сотрудник уже не на работе",
-                    show_alert=True
-                )
-                return
-
-            await connection.execute(
-                """
-                INSERT INTO attendance_events (
-                    employee_id,
-                    event_type,
-                    event_time,
-                    source,
-                    created_by
-                )
-
-                VALUES ($1, $2, $3, 'TELEGRAM', $4)
-                """,
-                employee_id,
-                event_type,
-                now,
-                str(callback.from_user.id)
-            )
 
     await callback.answer("Записано")
 

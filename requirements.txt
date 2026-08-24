@@ -10,3 +10,5 @@ python-dotenv
 jinja2
 itsdangerous
 httpx
+openpyxl
+reportlab

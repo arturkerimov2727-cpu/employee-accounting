@@ -7,6 +7,7 @@
   <title>Система учёта сотрудников</title>
   <link rel="stylesheet" href="/static/css/app.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
+  <script src="/static/js/charts.js" defer></script>
   <script src="/static/js/app.js" defer></script>
 </head>
 <body class="auth-pending">
@@ -36,6 +37,7 @@
         <button class="nav-item" type="button" data-view="attendance"><span>◷</span><b>Посещения</b></button>
         <button class="nav-item" type="button" data-view="reports"><span>▥</span><b>Отчёты</b></button>
         <button class="nav-item" type="button" data-view="charts"><span>▤</span><b>Графики</b></button>
+        <button class="nav-item manager-only" type="button" data-view="lateness"><span>◷</span><b>Опоздания</b></button>
         <button class="nav-item" type="button" data-view="departments"><span>♧</span><b>Отделы</b></button>
         <button class="nav-item" type="button" data-view="settings"><span>⚙</span><b>Настройки</b></button>
         <button class="nav-item" type="button" data-view="audit"><span>▣</span><b>Журнал событий</b></button>
@@ -74,6 +76,10 @@
             <article class="metric-card blue"><span class="metric-icon">⇥</span><div><span>Пришли сегодня</span><strong id="metric-arrived">0</strong><small>за день</small></div></article>
             <article class="metric-card orange"><span class="metric-icon">⇤</span><div><span>Ушли сегодня</span><strong id="metric-left">0</strong><small>за день</small></div></article>
             <article class="metric-card purple"><span class="metric-icon">◷</span><div><span>Рабочих часов</span><strong id="metric-hours">0 ч</strong><small>сегодня</small></div></article>
+            <article class="metric-card orange"><span class="metric-icon">!</span><div><span>Опоздали</span><strong id="metric-late">0</strong><small>сегодня</small></div></article>
+            <article class="metric-card blue"><span class="metric-icon">⊘</span><div><span>Отсутствуют</span><strong id="metric-absent">0</strong><small>рабочие дни</small></div></article>
+            <article class="metric-card purple"><span class="metric-icon">↻</span><div><span>Незакрытые смены</span><strong id="metric-open-shifts">0</strong><small>требуют проверки</small></div></article>
+            <article class="metric-card green"><span class="metric-icon">+</span><div><span>Всего сотрудников</span><strong id="metric-employees">0</strong><small>активных</small></div></article>
           </section>
 
           <section class="dashboard-grid">
@@ -151,7 +157,7 @@
         </section>
 
         <section class="app-view" data-page="reports" hidden>
-          <div class="page-head"><div><h2>Отчёты</h2><p>Рабочее время за выбранный период</p></div><div class="page-actions"><button class="button" id="export-csv" type="button">↓ Экспорт CSV</button></div></div>
+          <div class="page-head"><div><h2>Отчёты</h2><p>Рабочее время за выбранный период</p></div><div class="page-actions"><button class="button" id="export-csv" type="button">↓ CSV</button><button class="button" id="export-xlsx" type="button">↓ XLSX</button><button class="button" id="export-pdf" type="button">↓ PDF</button></div></div>
 
           <section class="report-cards">
             <article class="mini-card"><small>Всего часов</small><strong id="report-total-hours">0 ч 00 мин</strong><p id="report-period"></p></article>
@@ -189,6 +195,11 @@
             <article class="panel"><div class="panel-head"><div><h3>Рабочие часы</h3><p>За последние 14 дней</p></div></div><div class="chart-wrap tall"><canvas id="monthly-chart"></canvas></div></article>
             <article class="panel"><div class="panel-head"><div><h3>Среднее время</h3><p>Приход и уход по дням</p></div></div><div class="chart-wrap tall"><canvas id="time-chart"></canvas></div></article>
           </section>
+        </section>
+
+        <section class="app-view" data-page="lateness" hidden>
+          <div class="page-head"><div><h2>Аналитика опозданий</h2><p>Внутренняя статистика для руководителей</p></div></div>
+          <section class="panel"><div class="filters"><label>С даты<input id="lateness-from" type="date"></label><label>По дату<input id="lateness-to" type="date"></label><span></span><span></span><span></span><button class="button primary" id="load-lateness" type="button">Показать</button></div><div class="table-wrap"><table><thead><tr><th>Сотрудник</th><th>Отдел</th><th>Опозданий</th><th>Всего</th><th>Среднее</th><th>Переработка</th></tr></thead><tbody id="lateness-body"></tbody></table></div><div class="empty" id="lateness-empty" hidden>За этот период опозданий нет</div></section>
         </section>
 
         <section class="app-view" data-page="departments" hidden>
@@ -271,9 +282,19 @@
 
     <div class="drawer-actions">
       <button class="button primary" id="edit-employee" type="button">✎ Изменить</button>
+      <button class="button" id="edit-schedule" type="button">◷ График</button>
+      <button class="button" id="add-absence" type="button">＋ Отсутствие</button>
       <button class="button" id="quick-event" type="button"></button>
       <button class="button danger" id="archive-employee" type="button">В архив</button>
     </div>
+
+    <section class="employee-insights">
+      <h3>Статистика и календарь</h3>
+      <div class="period-switch" id="employee-period"><button data-period="day" type="button">День</button><button data-period="week" type="button">Неделя</button><button class="active" data-period="month" type="button">Месяц</button></div>
+      <div class="detail-grid insight-grid" id="employee-stats"></div>
+      <div class="calendar" id="employee-calendar"></div>
+      <div class="schedule-preview" id="employee-schedule"></div>
+    </section>
   </aside>
 
   <div class="modal" id="modal" aria-modal="true" role="dialog" hidden>
@@ -285,9 +306,20 @@
         <label>Отдел<select name="departmentId" required><option value="">Выберите отдел</option></select></label>
         <label>Должность<input name="position" required></label>
         <label>Телефон<input name="phone" placeholder="+7 ..."></label>
+        <label>Telegram ID<input name="telegramId" type="number" min="1" placeholder="Связать с Mini App"></label>
         <label>Дата приёма<input name="hiredAt" type="date" required></label>
         <div class="form-actions"><button class="button modal-close" type="button">Отмена</button><button class="button primary" type="submit">Сохранить</button></div>
       </form>
+    </section>
+
+    <section class="modal-panel" data-modal="schedule" hidden>
+      <div class="modal-head"><h2>Индивидуальный график</h2><button class="icon-button modal-close" type="button">×</button></div>
+      <form class="form-grid" id="schedule-form"><div class="wide" id="schedule-fields"></div><div class="form-actions"><button class="button modal-close" type="button">Отмена</button><button class="button primary" type="submit">Сохранить график</button></div></form>
+    </section>
+
+    <section class="modal-panel" data-modal="absence" hidden>
+      <div class="modal-head"><h2>Разрешённое отсутствие</h2><button class="icon-button modal-close" type="button">×</button></div>
+      <form class="form-grid" id="absence-form"><label class="wide">Тип<select name="absenceType"><option value="vacation">Отпуск</option><option value="sick_leave">Больничный</option><option value="business_trip">Командировка</option><option value="approved_absence">Разрешённое отсутствие</option></select></label><label>Начало<input name="startsOn" type="date" required></label><label>Окончание<input name="endsOn" type="date" required></label><label class="wide">Комментарий<textarea name="comment"></textarea></label><div class="form-actions"><button class="button modal-close" type="button">Отмена</button><button class="button primary" type="submit">Сохранить</button></div></form>
     </section>
 
     <section class="modal-panel" data-modal="event" hidden>

@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     session_days: int = 7
 
     telegram_bot_token: str = ""
+    telegram_mini_app_url: str = ""
+    telegram_init_data_max_age: int = 86400
+    telegram_guard_ids: str = ""
 
     trusted_hosts: str = "localhost,127.0.0.1"
     seed_demo_data: bool = True
@@ -30,6 +33,10 @@ class Settings(BaseSettings):
             for host in self.trusted_hosts.split(",")
             if host.strip()
         ]
+
+    @property
+    def telegram_guard_id_list(self):
+        return {int(value.strip()) for value in self.telegram_guard_ids.split(",") if value.strip().isdigit()}
 
 
 @lru_cache

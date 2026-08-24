@@ -91,7 +91,7 @@ button { border: 0; }
 .user-role { min-width: 128px; height: 34px; padding: 0 9px; border: 1px solid #dce3ec; border-radius: 6px; color: #38475d; background: #fff; font-size: 10px; }
 .user-actions { display: flex; gap: 7px; }
 .role-viewer #add-employee, .role-viewer #add-event, .role-viewer #add-department,
-.role-viewer .drawer-actions, .role-viewer .settings-form footer { display: none; }
+.role-viewer .drawer-actions, .role-viewer .settings-form footer, .role-viewer .manager-only { display: none; }
 
 .content { width: min(100%, 1500px); margin: 0 auto; padding: 20px 18px 36px; outline: 0; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin: 3px 0 18px; }
@@ -210,6 +210,7 @@ tbody tr:hover { background: #f8fbff; transform: translateX(2px); }
 .shift-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #edf1f5; font-size: 10px; }
 .shift-row span { color: var(--muted); }
 .drawer-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.employee-insights { margin-top: 22px; }.period-switch { display: flex; gap: 6px; margin: 9px 0; }.period-switch button { padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--muted); font-size: 10px; }.period-switch button.active { color: #fff; border-color: var(--blue); background: var(--blue); }.insight-grid { margin-bottom: 10px; }.calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }.calendar-day { min-height: 31px; display: grid; place-items: center; border-radius: 6px; color: #596b82; background: #edf1f6; font-size: 9px; }.calendar-day.completed { color: #167542; background: #dff6e8; }.calendar-day.late { color: #8a6414; background: #fff0bf; }.calendar-day.early { color: #a65419; background: #ffe1c3; }.calendar-day.absence { color: #2869b5; background: #dcecff; }.calendar-day.absent { color: #b43e4b; background: #ffe0e4; }.calendar-day.day_off { color: #728197; background: #eef1f5; }.calendar-day.open_shift { color: #744cc8; background: #eee2ff; }.schedule-preview { display: grid; gap: 4px; margin-top: 12px; color: var(--muted); font-size: 10px; }.schedule-row-preview { display: flex; justify-content: space-between; }.schedule-editor-row { display: grid; grid-template-columns: 100px 80px 1fr 1fr; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--muted); font-size: 10px; }
 
 .modal { position: fixed; z-index: 70; top: 50%; left: 50%; width: min(540px, calc(100vw - 28px)); max-height: calc(100vh - 28px); overflow: auto; transform: translate(-50%, -50%); border: 1px solid var(--line); border-radius: 12px; background: #fff; box-shadow: 0 25px 80px #1c2b4038; }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; border-bottom: 1px solid var(--line); }
