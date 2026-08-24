@@ -2,14 +2,18 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .config import get_settings
 from .database import create_pool, initialize_database
-from .routes import attendance, auth, miniapp, system, users
+from .routes import attendance
+from .routes import auth
+from .routes import miniapp
+from .routes import system
+from .routes import users
 
 from app.bot.bot import start_bot
 
@@ -70,8 +74,8 @@ async def security_headers(request: Request, call_next):
             expected = f"{request.url.scheme}://{request.headers.get('host')}"
 
             if origin.rstrip("/") != expected.rstrip("/"):
-                return HTMLResponse(
-                    "Недопустимый источник запроса",
+                return JSONResponse(
+                    {"detail": "Недопустимый источник запроса"},
                     status_code=403,
                 )
 

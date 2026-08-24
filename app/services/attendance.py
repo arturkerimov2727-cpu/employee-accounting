@@ -19,7 +19,7 @@ def get_timezone(name):
     try:
         return ZoneInfo(name or "Europe/Moscow")
     except Exception:
-        return ZoneInfo("Europe/Moscow")
+        return timezone(timedelta(hours=3))
 
 
 def minutes_between(start, end):
@@ -41,8 +41,8 @@ async def write_audit(connection, actor, action, entity_type, entity_id, details
 
 async def ensure_default_schedule(connection, employee_id, settings=None):
     settings = settings or await settings_map(connection)
-    start = settings.get("workday_start", "09:00")
-    end = settings.get("workday_end", "18:00")
+    start = time.fromisoformat(settings.get("workday_start", "09:00"))
+    end = time.fromisoformat(settings.get("workday_end", "18:00"))
     for weekday in range(7):
         await connection.execute(
             """INSERT INTO employee_schedules (employee_id, weekday, is_workday, starts_at, ends_at)
@@ -77,6 +77,9 @@ async def update_schedule(connection, employee_id, schedule, actor):
         ends_at = item.get("endsAt") if is_workday else None
         if is_workday and (not starts_at or not ends_at or starts_at >= ends_at):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Укажите корректное время смены")
+        if is_workday:
+            starts_at = time.fromisoformat(starts_at)
+            ends_at = time.fromisoformat(ends_at)
         await connection.execute(
             """INSERT INTO employee_schedules (employee_id, weekday, is_workday, starts_at, ends_at, updated_at)
                VALUES ($1, $2, $3, $4::time, $5::time, now())

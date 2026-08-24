@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
 
 from ..dependencies import AuthContext, get_pool, require_csrf_roles, require_roles
+from ..reports.excel import create_excel_report
+from ..reports.pdf import create_pdf_report
 from ..schemas.schemas import AttendanceCorrectionRequest
 from ..services.attendance import (
     attendance_days, period_bounds, schedule_for_employee, settings_map,
@@ -193,27 +195,7 @@ async def export_report(
         writer.writerows(values)
         return Response("\ufeff" + stream.getvalue(), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
     if file_format == "xlsx":
-        from openpyxl import Workbook
-        workbook = Workbook()
-        sheet = workbook.active
-        sheet.title = "Посещаемость"
-        sheet.append([f"Период: {start} — {end}"])
-        sheet.append(headings)
-        for value in values:
-            sheet.append(value)
-        for column in sheet.columns:
-            sheet.column_dimensions[column[0].column_letter].width = min(28, max(12, max(len(str(cell.value or "")) for cell in column) + 2))
-        output = io.BytesIO()
-        workbook.save(output)
-        return Response(output.getvalue(), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
-    from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.lib.styles import getSampleStyleSheet
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-    output = io.BytesIO()
-    document = SimpleDocTemplate(output, pagesize=landscape(A4), title="Отчёт посещаемости")
-    styles = getSampleStyleSheet()
-    table = Table([headings] + values, repeatRows=1)
-    table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1d67cf")), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white), ("GRID", (0, 0), (-1, -1), .25, colors.HexColor("#d9e1ed")), ("FONTSIZE", (0, 0), (-1, -1), 7), ("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
-    document.build([Paragraph(f"Отчёт посещаемости: {start} — {end}", styles["Title"]), Spacer(1, 12), table])
-    return Response(output.getvalue(), media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+        content = create_excel_report(f"{start} — {end}", headings, values)
+        return Response(content, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+    content = create_pdf_report(f"{start} — {end}", headings, values)
+    return Response(content, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{filename}"'})

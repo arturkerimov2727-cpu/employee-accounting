@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from asyncpg import UniqueViolationError
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -8,6 +8,13 @@ from ..services.attendance import attendance_days, ensure_default_schedule, reco
 from app.schemas.schemas import SystemAction
 
 router = APIRouter(prefix="/api/system", tags=["system"])
+
+
+def hired_at(value):
+    try:
+        return date.fromisoformat(value)
+    except (TypeError, ValueError):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Некорректная дата приёма") from None
 
 async def snapshot(pool, user):
     employees = await pool.fetch(
@@ -94,11 +101,12 @@ async def mutate_system(
                 if action == "createEmployee":
                     if not payload.fullName or not payload.departmentId:
                         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Укажите ФИО и отдел")
+                    employee_hired_at = hired_at(payload.hiredAt or datetime.now().date().isoformat())
                     employee_id = await connection.fetchval(
                         """INSERT INTO employees (full_name, department_id, position, phone, hired_at)
-                           VALUES ($1, $2, $3, $4, $5::date) RETURNING id""",
+                           VALUES ($1, $2, $3, $4, $5) RETURNING id""",
                         payload.fullName.strip(), payload.departmentId, (payload.position or "Сотрудник").strip(),
-                        (payload.phone or "").strip(), payload.hiredAt or datetime.now().date().isoformat(),
+                        (payload.phone or "").strip(), employee_hired_at,
                     )
                     await ensure_default_schedule(connection, employee_id)
                     await write_audit(connection, user.email, "CREATE", "employee", employee_id, f"Добавлен сотрудник: {payload.fullName.strip()}")
@@ -111,11 +119,12 @@ async def mutate_system(
                     )
                     if not before:
                         raise HTTPException(status.HTTP_404_NOT_FOUND, "Сотрудник не найден")
+                    employee_hired_at = hired_at(payload.hiredAt)
                     result = await connection.execute(
                         """UPDATE employees SET full_name=$1, department_id=$2, position=$3, phone=$4, hired_at=$5::date,
                            telegram_id=$6 WHERE id=$7 AND active=TRUE""",
                         payload.fullName.strip(), payload.departmentId, (payload.position or "Сотрудник").strip(),
-                        (payload.phone or "").strip(), payload.hiredAt, payload.telegramId, payload.id,
+                        (payload.phone or "").strip(), employee_hired_at, payload.telegramId, payload.id,
                     )
                     if result.endswith(" 0"):
                         raise HTTPException(status.HTTP_404_NOT_FOUND, "Сотрудник не найден")
