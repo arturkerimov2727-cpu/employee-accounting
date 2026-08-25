@@ -1,11 +1,9 @@
 fastapi
 pydantic
-pydantic-settings
 argon2-cffi
 email-validator
 uvicorn[standard]
 asyncpg
-python-dotenv
 jinja2
 itsdangerous
 httpx
