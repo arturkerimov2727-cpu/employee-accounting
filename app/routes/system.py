@@ -19,7 +19,7 @@ def hired_at(value):
 async def snapshot(pool, user):
     employees = await pool.fetch(
         """SELECT e.id, e.full_name, e.department_id, d.name AS department,
-                  e.position, e.phone, e.hired_at, e.active
+                  e.position, e.phone, e.hired_at, e.active, e.telegram_id
            FROM employees e JOIN departments d ON d.id = e.department_id
            WHERE e.active = TRUE ORDER BY e.full_name"""
     )
@@ -55,7 +55,7 @@ async def snapshot(pool, user):
         "employees": [{
             "id": row["id"], "fullName": row["full_name"], "departmentId": row["department_id"],
             "department": row["department"], "position": row["position"], "phone": row["phone"],
-            "hiredAt": row["hired_at"].isoformat(), "active": row["active"],
+            "hiredAt": row["hired_at"].isoformat(), "active": row["active"], "telegramId": row["telegram_id"],
         } for row in employees],
         "departments": [{"id": row["id"], "name": row["name"], "employeeCount": row["employee_count"]} for row in departments],
         "events": [{
@@ -102,10 +102,10 @@ async def mutate_system(
                         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Укажите ФИО и отдел")
                     employee_hired_at = hired_at(payload.hiredAt or datetime.now().date().isoformat())
                     employee_id = await connection.fetchval(
-                        """INSERT INTO employees (full_name, department_id, position, phone, hired_at)
-                           VALUES ($1, $2, $3, $4, $5) RETURNING id""",
+                        """INSERT INTO employees (full_name, department_id, position, phone, hired_at, telegram_id)
+                           VALUES ($1, $2, $3, $4, $5, $6) RETURNING id""",
                         payload.fullName.strip(), payload.departmentId, (payload.position or "Сотрудник").strip(),
-                        (payload.phone or "").strip(), employee_hired_at,
+                        (payload.phone or "").strip(), employee_hired_at, payload.telegramId,
                     )
                     await ensure_default_schedule(connection, employee_id)
                     await write_audit(connection, user.email, "CREATE", "employee", employee_id, f"Добавлен сотрудник: {payload.fullName.strip()}")
@@ -113,23 +113,23 @@ async def mutate_system(
                     if not payload.id or not payload.fullName or not payload.departmentId:
                         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Недостаточно данных")
                     before = await connection.fetchrow(
-                        """SELECT full_name, department_id, position, phone, hired_at
+                        """SELECT full_name, department_id, position, phone, hired_at, telegram_id
                            FROM employees WHERE id=$1 AND active=TRUE FOR UPDATE""", payload.id,
                     )
                     if not before:
                         raise HTTPException(status.HTTP_404_NOT_FOUND, "Сотрудник не найден")
                     employee_hired_at = hired_at(payload.hiredAt)
                     result = await connection.execute(
-                        """UPDATE employees SET full_name=$1, department_id=$2, position=$3, phone=$4, hired_at=$5::date
-                           WHERE id=$6 AND active=TRUE""",
+                        """UPDATE employees SET full_name=$1, department_id=$2, position=$3, phone=$4, hired_at=$5::date,
+                           telegram_id=$6 WHERE id=$7 AND active=TRUE""",
                         payload.fullName.strip(), payload.departmentId, (payload.position or "Сотрудник").strip(),
-                        (payload.phone or "").strip(), employee_hired_at, payload.id,
+                        (payload.phone or "").strip(), employee_hired_at, payload.telegramId, payload.id,
                     )
                     if result.endswith(" 0"):
                         raise HTTPException(status.HTTP_404_NOT_FOUND, "Сотрудник не найден")
                     await write_audit(connection, user.email, "UPDATE", "employee", payload.id, f"Обновлены данные: {payload.fullName.strip()}")
                     changes = []
-                    fields = {"ФИО": (before["full_name"], payload.fullName.strip()), "Должность": (before["position"], (payload.position or "Сотрудник").strip()), "Телефон": (before["phone"], (payload.phone or "").strip())}
+                    fields = {"ФИО": (before["full_name"], payload.fullName.strip()), "Должность": (before["position"], (payload.position or "Сотрудник").strip()), "Телефон": (before["phone"], (payload.phone or "").strip()), "Telegram ID": (before["telegram_id"], payload.telegramId)}
                     for label, (old, new) in fields.items():
                         if str(old or "") != str(new or ""):
                             changes.append(f"{label}: {old or '—'} → {new or '—'}")

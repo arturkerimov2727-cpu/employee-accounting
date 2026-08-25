@@ -44,6 +44,7 @@ class SystemAction(BaseModel):
     position: str | None = Field(default=None, max_length=120)
     phone: str | None = Field(default=None, max_length=40)
     hiredAt: str | None = None
+    telegramId: int | None = None
     schedule: list[dict] | None = None
     absenceType: Literal["vacation", "sick_leave", "business_trip", "approved_absence"] | None = None
     startsOn: str | None = None

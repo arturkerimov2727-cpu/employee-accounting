@@ -43,13 +43,15 @@ async def ensure_default_schedule(connection, employee_id, settings=None):
     settings = settings or await settings_map(connection)
     start = time.fromisoformat(settings.get("workday_start", "09:00"))
     end = time.fromisoformat(settings.get("workday_end", "18:00"))
-    for weekday in range(7):
-        await connection.execute(
-            """INSERT INTO employee_schedules (employee_id, weekday, is_workday, starts_at, ends_at)
-               VALUES ($1, $2, $3, CASE WHEN $3 THEN $4::time END, CASE WHEN $3 THEN $5::time END)
-               ON CONFLICT (employee_id, weekday) DO NOTHING""",
-            employee_id, weekday, weekday < 5, start, end,
-        )
+    await connection.execute(
+        """INSERT INTO employee_schedules (employee_id, weekday, is_workday, starts_at, ends_at)
+           SELECT $1, weekday, weekday < 5,
+                  CASE WHEN weekday < 5 THEN $2::time END,
+                  CASE WHEN weekday < 5 THEN $3::time END
+           FROM generate_series(0, 6) AS days(weekday)
+           ON CONFLICT (employee_id, weekday) DO NOTHING""",
+        employee_id, start, end,
+    )
 
 
 async def schedule_for_employee(connection, employee_id):
@@ -122,12 +124,14 @@ async def record_attendance_event(
 
 
 async def attendance_days(
-    connection, employee_id, start_day, end_day, timezone_name=None,
+    connection, employee_id, start_day, end_day, timezone_name=None, schedule=None,
 ):
     tz = get_timezone(timezone_name)
     start_at = datetime.combine(start_day, time.min, tzinfo=tz).astimezone(timezone.utc)
     end_at = datetime.combine(end_day + timedelta(days=1), time.min, tzinfo=tz).astimezone(timezone.utc)
-    schedule = {item["weekday"]: item for item in await schedule_for_employee(connection, employee_id)}
+    if schedule is None:
+        schedule = await schedule_for_employee(connection, employee_id)
+    schedule = {item["weekday"]: item for item in schedule}
     events = await connection.fetch(
         """SELECT id, event_type, event_time, source, comment FROM attendance_events
            WHERE employee_id=$1 AND event_time >= $2 AND event_time < $3

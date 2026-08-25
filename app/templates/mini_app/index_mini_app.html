@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101722">
+  <title>Мой рабочий день</title>
+  <link rel="stylesheet" href="/static/css/mini_app/mini_app.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/static/js/mini_app/mini_app.js" defer></script>
+</head>
+<body>
+  <main class="miniapp" id="miniapp">
+    <section class="screen-state" id="loading"><span class="loader"></span><p>Загружаем данные…</p></section>
+    <section class="screen-state error" id="error" hidden><span>!</span><h1>Не удалось открыть приложение</h1><p id="error-text"></p><button id="retry" type="button">Повторить</button></section>
+
+    <div id="app" hidden>
+      <header class="hero">
+        <div class="hero-top"><span class="brand">МОЯ СМЕНА</span><span id="today-date"></span></div>
+        <div class="person"><span class="avatar" id="avatar"></span><div><h1 id="full-name"></h1><p id="position"></p><small id="department"></small></div></div>
+        <div class="status-card"><span class="status-dot" id="status-dot"></span><div><strong id="status"></strong><small id="status-detail"></small></div><b id="shift-duration"></b></div>
+      </header>
+
+      <nav class="tabs" aria-label="Разделы">
+        <button class="active" data-tab="home" type="button">Сегодня</button>
+        <button data-tab="stats" type="button">Статистика</button>
+        <button data-tab="history" type="button">История</button>
+        <button data-tab="schedule" type="button">График</button>
+      </nav>
+
+      <section class="tab" data-panel="home">
+        <article class="schedule-card"><div><small>ГРАФИК НА СЕГОДНЯ</small><strong id="today-schedule"></strong></div><span id="schedule-state"></span></article>
+        <div class="day-grid">
+          <article><small>ПРИХОД</small><strong id="arrival">—</strong></article>
+          <article><small>УХОД</small><strong id="departure">—</strong></article>
+          <article><small>ОТРАБОТАНО</small><strong id="worked">—</strong></article>
+        </div>
+        <div class="notice" id="attendance-note" hidden></div>
+        <div class="actions"><button class="attendance in" data-event="in" type="button">✓ Я пришёл</button><button class="attendance out" data-event="out" type="button">↗ Я ушёл</button></div>
+      </section>
+
+      <section class="tab" data-panel="stats" hidden>
+        <div class="periods"><button data-period="day" type="button">День</button><button data-period="week" type="button">Неделя</button><button class="active" data-period="month" type="button">Месяц</button></div>
+        <p class="period-label" id="stats-period"></p>
+        <div class="stat-list" id="stat-list"></div>
+      </section>
+
+      <section class="tab" data-panel="history" hidden><div class="history" id="history"></div></section>
+
+      <section class="tab" data-panel="schedule" hidden><div class="schedule-list" id="schedule-list"></div></section>
+    </div>
+  </main>
+</body>
+</html>

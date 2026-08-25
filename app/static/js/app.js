@@ -594,6 +594,7 @@ function openEmployeeModal(employee = null) {
   form.elements.fullName.value = employee?.fullName || "";
   form.elements.position.value = employee?.position || "";
   form.elements.phone.value = employee?.phone || "";
+  form.elements.telegramId.value = employee?.telegramId || "";
   form.elements.hiredAt.value = employee?.hiredAt || todayKey;
   openOverlay("modal");
 }
@@ -957,6 +958,8 @@ document.querySelector("#employee-form").addEventListener("submit", async (event
   event.preventDefault();
   const values = Object.fromEntries(new FormData(event.currentTarget));
   const employee = state.editingEmployee;
+  if (!values.telegramId) delete values.telegramId;
+  else values.telegramId = Number(values.telegramId);
   await api({
     action: employee ? "updateEmployee" : "createEmployee",
     id: employee?.id,

@@ -34,10 +34,14 @@ CREATE TABLE IF NOT EXISTS employees (
   department_id BIGINT NOT NULL REFERENCES departments(id),
   position VARCHAR(120) NOT NULL DEFAULT 'Сотрудник',
   phone VARCHAR(40) NOT NULL DEFAULT '',
+  telegram_id BIGINT UNIQUE,
   hired_at DATE NOT NULL,
   active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS telegram_id BIGINT;
+CREATE UNIQUE INDEX IF NOT EXISTS employees_telegram_unique_idx ON employees(telegram_id) WHERE telegram_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS employee_schedules (
   id BIGSERIAL PRIMARY KEY,
@@ -94,6 +98,7 @@ CREATE TABLE IF NOT EXISTS settings (
 CREATE INDEX IF NOT EXISTS sessions_token_idx ON sessions(token_hash);
 CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS employees_department_idx ON employees(department_id);
+CREATE INDEX IF NOT EXISTS employees_telegram_idx ON employees(telegram_id);
 CREATE INDEX IF NOT EXISTS employee_schedules_employee_idx ON employee_schedules(employee_id, weekday);
 CREATE INDEX IF NOT EXISTS employee_absences_employee_date_idx ON employee_absences(employee_id, starts_on, ends_on);
 CREATE INDEX IF NOT EXISTS attendance_employee_time_idx ON attendance_events(employee_id, event_time DESC);
