@@ -44,7 +44,6 @@ class SystemAction(BaseModel):
     position: str | None = Field(default=None, max_length=120)
     phone: str | None = Field(default=None, max_length=40)
     hiredAt: str | None = None
-    telegramId: int | None = None
     schedule: list[dict] | None = None
     absenceType: Literal["vacation", "sick_leave", "business_trip", "approved_absence"] | None = None
     startsOn: str | None = None
@@ -61,7 +60,3 @@ class UserStatusRequest(BaseModel):
 class AttendanceCorrectionRequest(BaseModel):
     event_time: datetime
     reason: str = Field(min_length=3, max_length=500)
-
-
-class MiniAppRequest(BaseModel):
-    init_data: str = Field(min_length=1, max_length=8192)

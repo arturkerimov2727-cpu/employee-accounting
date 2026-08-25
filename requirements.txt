@@ -4,7 +4,6 @@ pydantic-settings
 argon2-cffi
 email-validator
 uvicorn[standard]
-aiogram
 asyncpg
 python-dotenv
 jinja2

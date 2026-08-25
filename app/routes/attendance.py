@@ -28,7 +28,7 @@ def parse_day(value, fallback):
 
 async def employee_or_404(connection, employee_id):
     employee = await connection.fetchrow(
-        """SELECT e.id, e.full_name, e.position, e.phone, e.hired_at, e.telegram_id,
+        """SELECT e.id, e.full_name, e.position, e.phone, e.hired_at,
                   d.id AS department_id, d.name AS department
            FROM employees e JOIN departments d ON d.id=e.department_id
            WHERE e.id=$1 AND e.active=TRUE""", employee_id,
