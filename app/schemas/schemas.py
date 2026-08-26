@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -43,6 +43,8 @@ class SystemAction(BaseModel):
     departmentId: int | None = None
     position: str | None = Field(default=None, max_length=120)
     phone: str | None = Field(default=None, max_length=40)
+    email: EmailStr | None = None
+    birthDate: date | None = None
     hiredAt: str | None = None
     telegramId: int | None = None
     schedule: list[dict] | None = None

@@ -19,7 +19,7 @@ def hired_at(value):
 async def snapshot(pool, user):
     employees = await pool.fetch(
         """SELECT e.id, e.full_name, e.department_id, d.name AS department,
-                  e.position, e.phone, e.hired_at, e.active, e.telegram_id
+                  e.position, e.phone, e.email, e.birth_date, e.hired_at, e.active, e.telegram_id
            FROM employees e JOIN departments d ON d.id = e.department_id
            WHERE e.active = TRUE ORDER BY e.full_name"""
     )
@@ -30,15 +30,24 @@ async def snapshot(pool, user):
     )
     events = await pool.fetch(
         """SELECT a.id, a.employee_id, e.full_name AS employee_name, d.name AS department,
-                  a.event_type, a.event_time, a.source, a.comment, a.created_by
+                  a.event_type, a.event_time, a.source, a.comment, a.created_by,
+                  COALESCE(u.full_name, marker.full_name, a.created_by) AS created_by_name,
+                  COALESCE(u.email::text, marker.email::text, '') AS created_by_email
            FROM attendance_events a JOIN employees e ON e.id = a.employee_id
            JOIN departments d ON d.id = e.department_id
+           LEFT JOIN users u ON lower(u.email::text) = lower(a.created_by)
+           LEFT JOIN employees marker ON marker.telegram_id::text = a.created_by
            ORDER BY a.event_time DESC LIMIT 1200"""
     )
     audit = await pool.fetch(
         """SELECT id, actor, action, entity_type, entity_id, details, created_at
            FROM audit_log ORDER BY created_at DESC LIMIT 200"""
     )
+    pending_user_ids = []
+    if user.role == "admin":
+        pending_user_ids = await pool.fetch(
+            "SELECT id FROM users WHERE status = 'pending' ORDER BY created_at DESC"
+        )
     setting_rows = await pool.fetch("SELECT key, value FROM settings")
     settings = {row["key"]: row["value"] for row in setting_rows}
     today = datetime.now().date()
@@ -55,6 +64,7 @@ async def snapshot(pool, user):
         "employees": [{
             "id": row["id"], "fullName": row["full_name"], "departmentId": row["department_id"],
             "department": row["department"], "position": row["position"], "phone": row["phone"],
+            "email": str(row["email"]) if row["email"] else "", "birthDate": row["birth_date"].isoformat() if row["birth_date"] else None,
             "hiredAt": row["hired_at"].isoformat(), "active": row["active"], "telegramId": row["telegram_id"],
         } for row in employees],
         "departments": [{"id": row["id"], "name": row["name"], "employeeCount": row["employee_count"]} for row in departments],
@@ -63,12 +73,16 @@ async def snapshot(pool, user):
             "department": row["department"], "eventType": row["event_type"],
             "eventTime": row["event_time"].astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
             "source": row["source"], "comment": row["comment"], "createdBy": row["created_by"],
+            "createdByName": row["created_by_name"], "createdByEmail": row["created_by_email"],
         } for row in events],
         "audit": [{
             "id": row["id"], "actor": row["actor"], "action": row["action"],
             "entityType": row["entity_type"], "entityId": row["entity_id"], "details": row["details"],
             "createdAt": row["created_at"].astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
         } for row in audit],
+        "notifications": {
+            "pendingUserIds": [row["id"] for row in pending_user_ids],
+        },
         "settings": settings,
         "dashboard": {
             "totalEmployees": len(employees),
@@ -102,10 +116,11 @@ async def mutate_system(
                         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Укажите ФИО и отдел")
                     employee_hired_at = hired_at(payload.hiredAt or datetime.now().date().isoformat())
                     employee_id = await connection.fetchval(
-                        """INSERT INTO employees (full_name, department_id, position, phone, hired_at, telegram_id)
-                           VALUES ($1, $2, $3, $4, $5, $6) RETURNING id""",
+                        """INSERT INTO employees (full_name, department_id, position, phone, email, birth_date, hired_at, telegram_id)
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id""",
                         payload.fullName.strip(), payload.departmentId, (payload.position or "Сотрудник").strip(),
-                        (payload.phone or "").strip(), employee_hired_at, payload.telegramId,
+                        (payload.phone or "").strip(), str(payload.email).lower() if payload.email else None,
+                        payload.birthDate, employee_hired_at, payload.telegramId,
                     )
                     await ensure_default_schedule(connection, employee_id)
                     await write_audit(connection, user.email, "CREATE", "employee", employee_id, f"Добавлен сотрудник: {payload.fullName.strip()}")
@@ -113,23 +128,24 @@ async def mutate_system(
                     if not payload.id or not payload.fullName or not payload.departmentId:
                         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Недостаточно данных")
                     before = await connection.fetchrow(
-                        """SELECT full_name, department_id, position, phone, hired_at, telegram_id
+                        """SELECT full_name, department_id, position, phone, email, birth_date, hired_at, telegram_id
                            FROM employees WHERE id=$1 AND active=TRUE FOR UPDATE""", payload.id,
                     )
                     if not before:
                         raise HTTPException(status.HTTP_404_NOT_FOUND, "Сотрудник не найден")
                     employee_hired_at = hired_at(payload.hiredAt)
                     result = await connection.execute(
-                        """UPDATE employees SET full_name=$1, department_id=$2, position=$3, phone=$4, hired_at=$5::date,
-                           telegram_id=$6 WHERE id=$7 AND active=TRUE""",
+                        """UPDATE employees SET full_name=$1, department_id=$2, position=$3, phone=$4, email=$5, birth_date=$6,
+                           hired_at=$7::date, telegram_id=$8 WHERE id=$9 AND active=TRUE""",
                         payload.fullName.strip(), payload.departmentId, (payload.position or "Сотрудник").strip(),
-                        (payload.phone or "").strip(), employee_hired_at, payload.telegramId, payload.id,
+                        (payload.phone or "").strip(), str(payload.email).lower() if payload.email else None,
+                        payload.birthDate, employee_hired_at, payload.telegramId, payload.id,
                     )
                     if result.endswith(" 0"):
                         raise HTTPException(status.HTTP_404_NOT_FOUND, "Сотрудник не найден")
                     await write_audit(connection, user.email, "UPDATE", "employee", payload.id, f"Обновлены данные: {payload.fullName.strip()}")
                     changes = []
-                    fields = {"ФИО": (before["full_name"], payload.fullName.strip()), "Должность": (before["position"], (payload.position or "Сотрудник").strip()), "Телефон": (before["phone"], (payload.phone or "").strip()), "Telegram ID": (before["telegram_id"], payload.telegramId)}
+                    fields = {"ФИО": (before["full_name"], payload.fullName.strip()), "Должность": (before["position"], (payload.position or "Сотрудник").strip()), "Телефон": (before["phone"], (payload.phone or "").strip()), "Почта": (before["email"], str(payload.email).lower() if payload.email else None), "Дата рождения": (before["birth_date"], payload.birthDate), "Telegram ID": (before["telegram_id"], payload.telegramId)}
                     for label, (old, new) in fields.items():
                         if str(old or "") != str(new or ""):
                             changes.append(f"{label}: {old or '—'} → {new or '—'}")

@@ -339,6 +339,20 @@ function renderEmployees() {
 }
 function renderAttendance() {
   const events = state.data.events.slice(0, 300);
+  const arrived = new Set(
+    state.data.events
+      .filter((event) => event.eventType === "IN" && event.eventTime.slice(0, 10) === todayKey)
+      .map((event) => event.employeeId)
+  ).size;
+  const totalEmployees = state.data.employees.length;
+  const notArrived = Math.max(0, totalEmployees - arrived);
+  document.querySelector("#attendance-total-employees").textContent = totalEmployees;
+  document.querySelector("#attendance-arrived").textContent = arrived;
+  document.querySelector("#attendance-not-arrived").textContent = notArrived;
+  const chart = AttendanceCharts.drawAttendanceSummary(
+    "attendance-summary-chart", totalEmployees, arrived, notArrived
+  );
+  if (chart) state.charts.push(chart);
   const body = document.querySelector("#attendance-body");
   const template = document.querySelector("#attendance-row-template");
   body.replaceChildren();
@@ -355,6 +369,8 @@ function renderAttendance() {
     badge.textContent = event.eventType === "IN" ? "⇥ Приход" : "⇤ Уход";
     badge.classList.add(event.eventType === "IN" ? "working" : "left");
     fragment.querySelector("[data-source]").textContent = event.source;
+    fragment.querySelector("[data-actor]").textContent = event.createdByName || event.createdBy || "-";
+    fragment.querySelector("[data-actor-email]").textContent = event.createdByEmail || "-";
     fragment.querySelector("[data-comment]").textContent = event.comment || "-";
     body.append(fragment);
   });
@@ -420,13 +436,23 @@ function renderAudit() {
       `${item.entityType}${item.entityId ? ` #${item.entityId}` : ""}`;
     fragment.querySelector("[data-actor]").textContent = item.actor;
     const approve = fragment.querySelector("[data-approve]");
-    if (item.action === "REGISTER" && item.entityId) {
+    const canApprove = state.data.user?.role === "admin"
+      && state.data.notifications?.pendingUserIds?.includes(item.entityId);
+    if (item.action === "REGISTER" && item.entityId && canApprove) {
       approve.hidden = false;
       approve.dataset.userId = item.entityId;
     }
     list.append(fragment);
   });
   empty.hidden = state.data.audit.length > 0;
+}
+function renderNotifications() {
+  const badge = document.querySelector("#notification-count");
+  const pending = state.data.user?.role === "admin"
+    ? state.data.notifications?.pendingUserIds?.length || 0
+    : 0;
+  badge.hidden = pending === 0;
+  badge.textContent = pending > 99 ? "99+" : pending;
 }
 function roleLabel(role) {
   return {
@@ -533,6 +559,7 @@ function render() {
     audit: renderAudit,
     users: renderUsers
   }[state.view];
+  renderNotifications();
   renderer();
   dom.content.focus();
 }
@@ -554,6 +581,8 @@ function showEmployee(id) {
   document.querySelector("#drawer-month").textContent = durationLabel(monthMinutes);
   document.querySelector("#drawer-phone").textContent = employee.phone || "-";
   document.querySelector("#drawer-hired").textContent = formatDate(employee.hiredAt);
+  document.querySelector("#drawer-email").textContent = employee.email || "-";
+  document.querySelector("#drawer-birthday").textContent = formatDate(employee.birthDate);
   const shifts = document.querySelector("#drawer-shifts");
   const empty = document.querySelector("#drawer-shifts-empty");
   const template = document.querySelector("#shift-row-template");
@@ -594,6 +623,8 @@ function openEmployeeModal(employee = null) {
   form.elements.fullName.value = employee?.fullName || "";
   form.elements.position.value = employee?.position || "";
   form.elements.phone.value = employee?.phone || "";
+  form.elements.email.value = employee?.email || "";
+  form.elements.birthDate.value = employee?.birthDate || "";
   form.elements.telegramId.value = employee?.telegramId || "";
   form.elements.hiredAt.value = employee?.hiredAt || todayKey;
   openOverlay("modal");
@@ -798,7 +829,10 @@ async function approveFromAudit(button) {
     if (!response.ok) {
       throw new Error(data.detail || "Не удалось одобрить пользователя");
     }
-    button.textContent = "Одобрено";
+    state.data.notifications.pendingUserIds = state.data.notifications.pendingUserIds
+      .filter((id) => Number(id) !== userId);
+    button.hidden = true;
+    renderNotifications();
     showToast("Пользователь одобрен");
   } catch (error) {
     button.disabled = false;
@@ -877,6 +911,9 @@ document.querySelector("#sidebar-collapse").addEventListener("click", () => {
   dom.sidebar.classList.toggle("compact");
 });
 document.querySelector("#logout").addEventListener("click", logout);
+document.querySelector("#notifications").addEventListener("click", () => {
+  switchView("audit");
+});
 dom.themeToggle.addEventListener("change", () => {
   applyTheme(dom.themeToggle.checked ? "dark" : "light");
 });
@@ -960,6 +997,8 @@ document.querySelector("#employee-form").addEventListener("submit", async (event
   const employee = state.editingEmployee;
   if (!values.telegramId) delete values.telegramId;
   else values.telegramId = Number(values.telegramId);
+  if (!values.email) delete values.email;
+  if (!values.birthDate) delete values.birthDate;
   await api({
     action: employee ? "updateEmployee" : "createEmployee",
     id: employee?.id,
@@ -1045,11 +1084,11 @@ document.querySelector("#archive-employee").addEventListener("click", async () =
   const id = Number(dom.drawer.dataset.employeeId);
   const employee = state.data.employees.find((item) => Number(item.id) === id);
   if (!employee) return;
-  if (!confirm(`Переместить сотрудника «${employee.fullName}» в архив?`)) return;
+  if (!confirm(`Удалить сотрудника «${employee.fullName}» из активного списка? История посещений сохранится.`)) return;
   await api({
     action: "archiveEmployee",
     id: employee.id
-  }, "Сотрудник перемещён в архив");
+  }, "Сотрудник удалён из активного списка");
   closeOverlay();
 });
 dom.content.addEventListener("click", async (event) => {

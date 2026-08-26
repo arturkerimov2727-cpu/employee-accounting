@@ -10,6 +10,14 @@
   --orange-soft: #fff0e8;
   --purple: #8551e8;
   --purple-soft: #f3ebff;
+  --chart-blue: #2276e6;
+  --chart-blue-soft: #8bbcf5;
+  --chart-green: #18a957;
+  --chart-green-soft: rgba(24, 169, 87, .18);
+  --chart-orange: #ef6f21;
+  --chart-orange-soft: rgba(239, 111, 33, .18);
+  --chart-text: #5f6f85;
+  --chart-grid: #e4eaf2;
   --text: #172033;
   --muted: #7b879a;
   --line: #e3e8f0;
@@ -180,6 +188,7 @@ tbody tr:hover { background: #f8fbff; transform: translateX(2px); }
 
 .split { display: grid; grid-template-columns: 1fr 1fr; gap: 17px; }
 .report-cards, .department-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 17px; }
+.attendance-chart-panel { margin-bottom: 17px; }
 .mini-card { padding: 18px; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
 .mini-card small { color: var(--muted); font-size: 10px; }
 .mini-card strong { display: block; margin-top: 8px; font-size: 23px; }
@@ -195,7 +204,7 @@ tbody tr:hover { background: #f8fbff; transform: translateX(2px); }
 .settings-form footer { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
 
 .backdrop { position: fixed; z-index: 50; inset: 0; background: rgba(27, 39, 57, .42); backdrop-filter: blur(2px); }
-.drawer { position: fixed; z-index: 60; top: 0; right: 0; width: min(440px, 94vw); height: 100vh; overflow: auto; padding: 25px; border-left: 1px solid var(--line); background: #fff; box-shadow: -18px 0 60px #26354d26; animation: drawer-in .22s ease; }
+.drawer { position: fixed; z-index: 60; top: 50%; left: 50%; width: min(560px, calc(100vw - 48px)); max-height: calc(100vh - 72px); overflow: auto; padding: 28px; transform: translate(-50%, -50%); border: 1px solid var(--line); border-radius: 18px; background: #fff; box-shadow: 0 28px 90px #15223852; animation: drawer-in .32s cubic-bezier(.2, .8, .2, 1) both; }
 .drawer-close { position: absolute; top: 17px; right: 18px; width: 35px; height: 35px; border-radius: 50%; color: #66758b; background: #f2f5f8; font-size: 21px; }
 .profile { padding: 28px 0 20px; text-align: center; }
 .profile .avatar { width: 72px; height: 72px; margin: 0 auto; font-size: 18px; }
@@ -205,7 +214,7 @@ tbody tr:hover { background: #f8fbff; transform: translateX(2px); }
 .detail-cell { padding: 14px; border-radius: 8px; background: #f6f8fb; }
 .detail-cell small, .detail-cell strong { display: block; }
 .detail-cell small { margin-bottom: 7px; color: var(--muted); font-size: 9px; }
-.detail-cell strong { font-size: 12px; }
+.detail-cell strong { overflow-wrap: anywhere; font-size: 12px; }
 .drawer h3 { margin: 24px 0 10px; font-size: 14px; }
 .shift-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #edf1f5; font-size: 10px; }
 .shift-row span { color: var(--muted); }
@@ -257,6 +266,14 @@ html[data-theme="dark"] {
   --green-soft: #153626;
   --orange-soft: #40271b;
   --purple-soft: #302341;
+  --chart-blue: #4b9bff;
+  --chart-blue-soft: #2874ca;
+  --chart-green: #36c576;
+  --chart-green-soft: rgba(54, 197, 118, .2);
+  --chart-orange: #ff9a57;
+  --chart-orange-soft: rgba(255, 154, 87, .2);
+  --chart-text: #aab8ca;
+  --chart-grid: #2b394c;
   --shadow: 0 8px 25px #00000024;
   background: #0c1119;
 }
@@ -308,7 +325,7 @@ html[data-theme="dark"] .loading-state h2,
 html[data-theme="dark"] .page-head h2 { color: #eef3fa; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
-@keyframes drawer-in { from { transform: translateX(30px); opacity: 0; } }
+@keyframes drawer-in { from { opacity: 0; transform: translate(-50%, -46%) scale(.965); } }
 @keyframes card-rise { from { opacity: 0; transform: translateY(16px) scale(.98); } }
 @keyframes panel-in { from { opacity: 0; transform: translateY(10px); } }
 @keyframes row-in { from { opacity: 0; transform: translateX(-6px); } }
@@ -361,9 +378,10 @@ html[data-theme="dark"] .page-head h2 { color: #eef3fa; }
   .audit-item { grid-template-columns: 1fr; gap: 5px; }
   .panel-head { align-items: flex-start; }
   .chart-wrap { height: 240px; padding: 0 7px 12px; }
-  .drawer { padding: 20px; }
+  .drawer { width: calc(100vw - 28px); max-height: calc(100vh - 36px); padding: 20px; border-radius: 15px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .drawer { animation: none; }
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }

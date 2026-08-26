@@ -59,7 +59,7 @@
 
         <div class="topbar-actions">
           <span class="today" id="today-label">▣</span>
-          <button class="notification" type="button" aria-label="Уведомления">♧<b>3</b></button>
+          <button class="notification" id="notifications" type="button" aria-label="Открыть журнал событий" title="Открыть журнал событий">♧<b id="notification-count" hidden>0</b></button>
           <div class="account">
             <span class="account-avatar" id="account-avatar">АК</span>
             <span><strong id="account-name">Администратор</strong><small id="account-role">Администратор</small></span>
@@ -84,7 +84,7 @@
 
           <section class="dashboard-grid">
             <article class="panel">
-              <div class="panel-head"><h3>Рабочие часы по дням</h3><select class="input" id="chart-period"><option value="7">Последние 7 дней</option><option value="14">Последние 14 дней</option></select></div>
+              <div class="panel-head"><h3>Рабочие часы по дням</h3><select class="input" id="chart-period"><option value="7">Последние 7 дней</option><option value="14">Последние 14 дней</option><option value="30">Последний месяц</option></select></div>
               <div class="chart-wrap"><canvas id="hours-chart"></canvas></div>
             </article>
 
@@ -144,10 +144,21 @@
         <section class="app-view" data-page="attendance" hidden>
           <div class="page-head"><div><h2>Посещения</h2><p>Точный журнал приходов и уходов</p></div><div class="page-actions"><button class="button primary" id="add-event" type="button">＋ Записать событие</button></div></div>
 
+          <section class="report-cards attendance-cards">
+            <article class="mini-card"><small>Всего сотрудников</small><strong id="attendance-total-employees">0</strong><p>Активных</p></article>
+            <article class="mini-card"><small>Пришли сегодня</small><strong id="attendance-arrived">0</strong><p>Есть отметка прихода</p></article>
+            <article class="mini-card"><small>Ещё не пришли</small><strong id="attendance-not-arrived">0</strong><p>Без отметки прихода</p></article>
+          </section>
+
+          <section class="panel attendance-chart-panel">
+            <div class="panel-head"><div><h3>Посещаемость сегодня</h3><p>Активные сотрудники и отметки прихода</p></div></div>
+            <div class="chart-wrap"><canvas id="attendance-summary-chart"></canvas></div>
+          </section>
+
           <section class="panel">
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Дата и время</th><th>Сотрудник</th><th>Отдел</th><th>Событие</th><th>Источник</th><th>Комментарий</th></tr></thead>
+                <thead><tr><th>Дата и время</th><th>Сотрудник</th><th>Отдел</th><th>Событие</th><th>Источник</th><th>Кто отметил</th><th>Почта</th><th>Комментарий</th></tr></thead>
                 <tbody id="attendance-body"></tbody>
               </table>
             </div>
@@ -274,6 +285,8 @@
       <div class="detail-cell"><small>ЗА МЕСЯЦ</small><strong id="drawer-month"></strong></div>
       <div class="detail-cell"><small>ТЕЛЕФОН</small><strong id="drawer-phone"></strong></div>
       <div class="detail-cell"><small>РАБОТАЕТ С</small><strong id="drawer-hired"></strong></div>
+      <div class="detail-cell"><small>ПОЧТА</small><strong id="drawer-email"></strong></div>
+      <div class="detail-cell"><small>ДЕНЬ РОЖДЕНИЯ</small><strong id="drawer-birthday"></strong></div>
     </section>
 
     <h3>Последние смены</h3>
@@ -285,7 +298,7 @@
       <button class="button" id="edit-schedule" type="button">◷ График</button>
       <button class="button" id="add-absence" type="button">＋ Отсутствие</button>
       <button class="button" id="quick-event" type="button"></button>
-      <button class="button danger" id="archive-employee" type="button">В архив</button>
+      <button class="button danger" id="archive-employee" type="button">Удалить</button>
     </div>
 
     <section class="employee-insights">
@@ -305,7 +318,9 @@
         <label class="wide">ФИО<input name="fullName" required></label>
         <label>Отдел<select name="departmentId" required><option value="">Выберите отдел</option></select></label>
         <label>Должность<input name="position" required></label>
-        <label>Телефон<input name="phone" placeholder="+xxx xxx xxx xx - xx"></label>
+        <label>Телефон<input name="phone" placeholder="+xxxпш xxx xxx xx - xx"></label>
+        <label>Рабочая почта<input name="email" type="email" placeholder="name@company.ru"></label>
+        <label>Дата рождения<input name="birthDate" type="date"></label>
         <label>Telegram ID<input name="telegramId" type="number" min="1" placeholder="Связать с Mini App"></label>
         <label>Дата приёма<input name="hiredAt" type="date" required></label>
         <div class="form-actions"><button class="button modal-close" type="button">Отмена</button><button class="button primary" type="submit">Сохранить</button></div>
@@ -374,6 +389,8 @@
       <td data-department></td>
       <td><span class="status" data-event></span></td>
       <td data-source></td>
+      <td data-actor></td>
+      <td data-actor-email></td>
       <td data-comment></td>
     </tr>
   </template>

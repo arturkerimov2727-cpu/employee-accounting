@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS employees (
   department_id BIGINT NOT NULL REFERENCES departments(id),
   position VARCHAR(120) NOT NULL DEFAULT 'Сотрудник',
   phone VARCHAR(40) NOT NULL DEFAULT '',
+  email CITEXT,
+  birth_date DATE,
   telegram_id BIGINT UNIQUE,
   hired_at DATE NOT NULL,
   active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -41,6 +43,8 @@ CREATE TABLE IF NOT EXISTS employees (
 );
 
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS telegram_id BIGINT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS email CITEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS birth_date DATE;
 CREATE UNIQUE INDEX IF NOT EXISTS employees_telegram_unique_idx ON employees(telegram_id) WHERE telegram_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS employee_schedules (
