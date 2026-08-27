@@ -34,18 +34,17 @@ async def update_user(
     target = await pool.fetchrow("SELECT email::text, role FROM users WHERE id = $1", user_id)
     if not target:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")
-    removing_active_admin = target["role"] == "admin" and (payload.role != "admin" or payload.status != "active")
+    role = payload.role or target["role"]
+    removing_active_admin = target["role"] == "admin" and (role != "admin" or payload.status != "active")
     if removing_active_admin:
         admin_count = await pool.fetchval("SELECT count(*) FROM users WHERE role = 'admin' AND status = 'active'")
         if admin_count <= 1:
             raise HTTPException(status.HTTP_409_CONFLICT, "В системе должен остаться хотя бы один активный администратор")
-    role = payload.role or target["role"]
     await pool.execute(
         """UPDATE users SET status = $1, role = $2,
-           approved_at = CASE WHEN $1 = 'active' THEN COALESCE(approved_at, now()) ELSE approved_at END,
-           approved_by = CASE WHEN $1 = 'active' THEN COALESCE(approved_by, $3) ELSE approved_by END
-           WHERE id = $4""",
-        payload.status, role, actor.user_id, user_id,
+           approved_at = CASE WHEN $1 = 'active' THEN COALESCE(approved_at, now()) ELSE approved_at END
+           WHERE id = $3""",
+        payload.status, role, user_id,
     )
     if payload.status == "disabled":
         await pool.execute("DELETE FROM sessions WHERE user_id = $1", user_id)
