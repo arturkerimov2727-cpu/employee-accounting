@@ -11,7 +11,6 @@ from .config import get_settings
 from .database import create_pool, initialize_database
 from .routes import attendance
 from .routes import auth
-from .routes import miniapp
 from .routes import system
 from .routes import users
 
@@ -54,7 +53,6 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(system.router)
 app.include_router(attendance.router)
-app.include_router(miniapp.router)
 
 
 @app.middleware("http")
@@ -74,21 +72,19 @@ async def security_headers(request: Request, call_next):
     response = await call_next(request)
 
     response.headers["X-Content-Type-Options"] = "nosniff"
-    if request.url.path != "/miniapp":
-        response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "same-origin"
     response.headers["Permissions-Policy"] = (
         "camera=(), microphone=(), geolocation=()"
     )
 
-    frame_ancestors = "https://web.telegram.org https://*.telegram.org" if request.url.path == "/miniapp" else "'none'"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://telegram.org; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
         "style-src 'self'; "
         "img-src 'self' data:; "
         "connect-src 'self'; "
-        f"frame-ancestors {frame_ancestors}"
+        "frame-ancestors 'none'"
     )
 
     response.headers["Cache-Control"] = "private, no-store"
@@ -123,8 +119,3 @@ async def register_page(request: Request):
         request=request,
         name="register.html",
     )
-
-
-@app.get("/miniapp", response_class=HTMLResponse)
-async def miniapp_page(request: Request):
-    return templates.TemplateResponse(request=request, name="mini_app/index_mini_app.html")
