@@ -42,7 +42,7 @@ async def update_user(
             raise HTTPException(status.HTTP_409_CONFLICT, "В системе должен остаться хотя бы один активный администратор")
     await pool.execute(
         """UPDATE users SET status = $1, role = $2,
-           approved_at = CASE WHEN $1 = 'active' THEN COALESCE(approved_at, now()) ELSE approved_at END
+           approved_at = CASE WHEN $1::varchar(20) = 'active' THEN COALESCE(approved_at, now()) ELSE approved_at END
            WHERE id = $3""",
         payload.status, role, user_id,
     )
