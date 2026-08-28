@@ -24,6 +24,3 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 python main.py
 ```
-
-Перед запуском убедитесь, что PostgreSQL доступен по `DATABASE_URL` из `.env`.
-Docker Compose для локальной базы находится в `deploy/docker-compose.yml`.
