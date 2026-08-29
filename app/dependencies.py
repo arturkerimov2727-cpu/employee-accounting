@@ -24,7 +24,7 @@ async def get_current_user(
     request: Request,
     settings=Depends(get_settings)
 ):
-    raw_token = request.cookies.get(settings.cookie_name)
+    raw_token = request.cookies.get(settings.cookie_name) # может быть ответ или None
 
     if not raw_token:
         raise HTTPException(

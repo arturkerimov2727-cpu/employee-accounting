@@ -9,8 +9,6 @@ def load_env_file():
     with open(env_file, encoding="utf-8") as file:
         for line in file:
             line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
             key, value = line.split("=", 1)
             if key.strip():
                 os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
@@ -18,12 +16,17 @@ def load_env_file():
 
 def env_bool(name, default):
     value = os.getenv(name)
-    return default if value is None else value.lower() in {"1", "true", "yes", "on"}
+    if value is None:
+        return default
+    else:
+        return value.lower() in {"1", "true", "yes", "on"}
 
 
 def env_int(name, default):
     value = os.getenv(name)
-    return int(value) if value else default
+    if value:
+        return int(value)
+    else: default
 
 
 load_env_file()
@@ -37,7 +40,6 @@ class Settings:
         self.cookie_secure = env_bool("COOKIE_SECURE", False)
         self.session_days = env_int("SESSION_DAYS", 7)
         self.trusted_hosts = os.getenv("TRUSTED_HOSTS", "localhost,127.0.0.1")
-        self.seed_demo_data = env_bool("SEED_DEMO_DATA", True)
 
     @property
     def trusted_host_list(self):

@@ -9,7 +9,7 @@ from ..dependencies import AuthContext, get_current_user, get_pool, require_csrf
 from app.schemas.schemas import LoginRequest, RegisterRequest
 from ..security import (
     create_csrf_token, create_session_token, hash_password, hash_token,
-    password_needs_rehash, validate_password, verify_password,
+    validate_password, verify_password,
 )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -69,8 +69,6 @@ async def login(payload: LoginRequest, request: Request, settings: Settings = De
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Аккаунт ожидает одобрения администратора")
     if row["status"] != "active":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Аккаунт отключён")
-    if password_needs_rehash(row["password_hash"]):
-        await pool.execute("UPDATE users SET password_hash = $1 WHERE id = $2", hash_password(payload.password), row["id"])
     raw_token, csrf_token = create_session_token(), create_csrf_token()
     expires_at = datetime.now(timezone.utc) + timedelta(days=settings.session_days)
     await pool.execute("DELETE FROM sessions WHERE expires_at <= now()")
