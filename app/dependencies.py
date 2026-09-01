@@ -24,8 +24,7 @@ async def get_current_user(
     request: Request,
     settings=Depends(get_settings)
 ):
-    raw_token = request.cookies.get(settings.cookie_name) # может быть ответ или None
-
+    raw_token = request.cookies.get(settings.cookie_name)
     if not raw_token:
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,

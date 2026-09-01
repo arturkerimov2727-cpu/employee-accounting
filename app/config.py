@@ -9,6 +9,8 @@ def load_env_file():
     with open(env_file, encoding="utf-8") as file:
         for line in file:
             line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
             key, value = line.split("=", 1)
             if key.strip():
                 os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
@@ -24,9 +26,7 @@ def env_bool(name, default):
 
 def env_int(name, default):
     value = os.getenv(name)
-    if value:
-        return int(value)
-    else: default
+    return int(value) if value else default
 
 
 load_env_file()
@@ -34,7 +34,7 @@ load_env_file()
 
 class Settings:
     def __init__(self):
-        self.app_name = os.getenv("APP_NAME", "Система учёта сотрудников")
+        self.app_name = os.getenv("APP_NAME", "Check Workerss")
         self.database_url = os.getenv("DATABASE_URL", "postgresql://attendance:attendance@localhost:5432/attendance")
         self.cookie_name = os.getenv("COOKIE_NAME", "attendance_session")
         self.cookie_secure = env_bool("COOKIE_SECURE", False)

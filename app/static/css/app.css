@@ -47,10 +47,12 @@ button { border: 0; }
 }
 .sidebar-head { height: 74px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 1px solid var(--line); }
 .brand-mark { width: 43px; height: 43px; display: grid; place-items: center; border-radius: 9px; background: linear-gradient(145deg, #3288f1, #1665da); color: #fff; text-decoration: none; font-size: 25px; box-shadow: 0 7px 14px #1f72e333; }
+.brand-logo-mark { width: 33px; height: 33px; display: block; object-fit: contain; }
 .sidebar-collapse, .mobile-menu { color: #62718a; background: transparent; font-size: 21px; }
 .sidebar-nav { display: grid; gap: 7px; padding: 25px 12px; }
 .nav-item { min-height: 45px; display: flex; align-items: center; gap: 14px; padding: 0 15px; border-radius: 8px; color: #53627a; background: transparent; text-align: left; font-size: 13px; transition: color .2s, background .2s, transform .2s, box-shadow .2s; }
 .nav-item span { width: 24px; color: #687890; font-size: 21px; text-align: center; }
+.nav-logo-mark { width: 21px; height: 21px; display: block; object-fit: contain; }
 .nav-item b { font-weight: 500; }
 .nav-item:hover { color: var(--blue); background: #f6f9fe; transform: translateX(3px); }
 .nav-item.active { color: #1d67cf; background: #eaf2ff; box-shadow: inset 3px 0 0 #2276e6; }
@@ -115,6 +117,7 @@ button { border: 0; }
 .metric-card:hover { transform: translateY(-4px); border-color: #cdddf4; box-shadow: 0 14px 32px #315d9720; }
 .metric-card:hover .metric-icon { transform: scale(1.08) rotate(-3deg); }
 .metric-icon { width: 64px; height: 64px; display: grid; place-items: center; flex: none; border-radius: 50%; font-size: 31px; transition: transform .3s cubic-bezier(.2,.8,.2,1); }
+.metric-logo-mark { width: 48px; height: 48px; display: block; object-fit: contain; }
 .metric-card.green .metric-icon { color: var(--green); background: var(--green-soft); }
 .metric-card.blue .metric-icon { color: var(--blue); background: var(--blue-soft); }
 .metric-card.orange .metric-icon { color: var(--orange); background: var(--orange-soft); }
@@ -194,6 +197,7 @@ tbody tr:hover { background: #f8fbff; transform: translateX(2px); }
 .mini-card strong { display: block; margin-top: 8px; font-size: 23px; }
 .mini-card p { margin: 8px 0 0; color: #65748a; font-size: 10px; }
 .department-card { display: flex; align-items: center; gap: 14px; }
+.department-card > div { flex: 1; }
 .department-card .metric-icon { width: 48px; height: 48px; color: var(--blue); background: var(--blue-soft); font-size: 22px; }
 
 .audit-list { display: grid; }
@@ -242,7 +246,7 @@ tbody tr:hover { background: #f8fbff; transform: translateX(2px); }
 .auth-gate { position: fixed; z-index: 110; inset: 0; display: grid; place-items: center; padding: 20px; background: radial-gradient(circle at 50% 38%, #ffffff33, transparent 34%), #1b2c466b; backdrop-filter: blur(3px); transition: opacity .4s ease, visibility .4s ease; }
 .auth-card { position: relative; width: min(390px, 100%); overflow: hidden; padding: 33px; border: 1px solid #ffffff80; border-radius: 17px; background: rgba(255,255,255,.94); box-shadow: 0 28px 90px #14243f42; text-align: center; animation: auth-card-in .6s cubic-bezier(.2,.85,.2,1); }
 .auth-card::before { content: ""; position: absolute; inset: 0 0 auto; height: 4px; background: linear-gradient(90deg, #1b6de0, #54a4ff, #7e65ed); }
-.auth-logo { width: 58px; height: 58px; display: grid; place-items: center; margin: 0 auto 18px; border-radius: 15px; color: #fff; background: linear-gradient(145deg, #3289f2, #155fd0); box-shadow: 0 12px 25px #216eda42; font-size: 31px; }
+.auth-logo { width: 58px; height: 58px; display: block; box-sizing: border-box; margin: 0 auto 18px; padding: 6px; border-radius: 15px; background: linear-gradient(145deg, #3289f2, #155fd0); box-shadow: 0 12px 25px #216eda42; object-fit: contain; }
 .auth-card > small { color: #3074cf; font-size: 9px; font-weight: 800; letter-spacing: .16em; }
 .auth-card h2 { margin: 11px 0 8px; color: #1d2a3e; font-size: 24px; }
 .auth-card > p { max-width: 300px; margin: 0 auto; color: #718096; font-size: 11px; line-height: 1.65; }

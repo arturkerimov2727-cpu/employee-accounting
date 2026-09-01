@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from ..config import Settings, get_settings
 from ..dependencies import AuthContext, get_current_user, get_pool, require_csrf
-from app.schemas.schemas import LoginRequest, RegisterRequest
+from app.schemas.schemas import AdminProfileRequest, LoginRequest, RegisterRequest
 from ..security import (
     create_csrf_token, create_session_token, hash_password, hash_token,
     validate_password, verify_password,
@@ -14,9 +14,45 @@ from ..security import (
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-
 def public_user(user):
     return {"id": user.user_id, "name": user.full_name, "email": user.email, "role": user.role}
+
+@router.patch("/profile")
+async def update_admin_profile(
+    payload: AdminProfileRequest,
+    request: Request,
+    user=Depends(require_csrf),
+):
+    if user.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Профиль администратора доступен только администратору")
+    if not verify_password(
+        await get_pool(request).fetchval("SELECT password_hash FROM users WHERE id = $1", user.user_id),
+        payload.current_password,
+    ):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Текущий пароль указан неверно")
+    if payload.new_password:
+        password_errors = validate_password(payload.new_password)
+        if password_errors:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, ". ".join(password_errors))
+
+    pool = get_pool(request)
+    password_hash = hash_password(payload.new_password) if payload.new_password else None
+    try:
+        await pool.execute(
+            """UPDATE users SET full_name = $1, email = $2,
+               password_hash = COALESCE($3, password_hash)
+               WHERE id = $4""",
+            payload.full_name, str(payload.email).lower(), password_hash, user.user_id,
+        )
+        await pool.execute(
+            """INSERT INTO audit_log (actor, action, entity_type, entity_id, details)
+               VALUES ($1, 'UPDATE_PROFILE', 'user', $2, $3)""",
+            user.email, user.user_id,
+            "Изменён профиль администратора" + (" и пароль" if password_hash else ""),
+        )
+    except UniqueViolationError:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Пользователь с таким email уже существует") from None
+    return {"message": "Профиль администратора обновлён", "user": {"name": payload.full_name, "email": str(payload.email).lower(), "role": user.role}}
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)

@@ -164,6 +164,26 @@ async def mutate_system(
                         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Введите название отдела")
                     department_id = await connection.fetchval("INSERT INTO departments (name) VALUES ($1) RETURNING id", name)
                     await write_audit(connection, user.email, "CREATE", "department", department_id, f"Создан отдел: {name}")
+                elif action == "deleteDepartment":
+                    if user.role != "admin":
+                        raise HTTPException(status.HTTP_403_FORBIDDEN, "Удалять отделы может только администратор")
+                    if not payload.id:
+                        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Не указан отдел")
+                    department = await connection.fetchrow(
+                        "SELECT id, name FROM departments WHERE id = $1 FOR UPDATE", payload.id
+                    )
+                    if not department:
+                        raise HTTPException(status.HTTP_404_NOT_FOUND, "Отдел не найден")
+                    employee_count = await connection.fetchval(
+                        "SELECT count(*) FROM employees WHERE department_id = $1", payload.id
+                    )
+                    if employee_count:
+                        raise HTTPException(
+                            status.HTTP_409_CONFLICT,
+                            "Нельзя удалить отдел: сначала переведите или удалите всех сотрудников",
+                        )
+                    await connection.execute("DELETE FROM departments WHERE id = $1", payload.id)
+                    await write_audit(connection, user.email, "DELETE", "department", payload.id, f"Удалён отдел: {department['name']}")
                 elif action == "addEvent":
                     if not payload.employeeId or payload.eventType not in {"IN", "OUT"}:
                         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Некорректное событие")

@@ -1,10 +1,10 @@
-<!doctype html>
+<!DOCTYPE  html>
 <html lang="ru">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff">
-  <title>Система учёта сотрудников</title>
+  <title>Check Workerss</title>
   <link rel="stylesheet" href="/static/css/app.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
   <script src="/static/js/charts.js" defer></script>
@@ -12,13 +12,13 @@
 </head>
 <body class="auth-pending">
 
-  <div class="auth-gate" id="auth-gate" aria-live="polite">
-    <section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-title">
-      <span class="auth-logo">♙</span>
-      <small>ЗАКРЫТАЯ СИСТЕМА</small>
-      <h2 id="auth-title">Вход в систему</h2>
+  <div class="auth-gate" id="auth-gate">
+    <section class="auth-card" aria-modal="true">
+      <img class="auth-logo" src="/static/images/check-workerss-mark.png" alt="Check Workerss">
+      <small>CHECK WORKERSS</small>
+      <h2>Вход в систему</h2>
       <p id="auth-message">Проверяем ваш доступ к панели управления</p>
-      <div class="auth-security">✓ Данные загружаются только после проверки пользователя</div>
+      <div class="auth-security">✓ Доступ откроется только после проверки пользователя</div>
       <div class="auth-checking" id="auth-checking"><span class="spinner"></span><b>Проверка доступа...</b></div>
       <button class="button primary auth-login" id="auth-login" type="button" hidden>Перейти ко входу <span>→</span></button>
     </section>
@@ -27,13 +27,13 @@
   <div class="app-shell" id="app-shell">
     <aside class="sidebar" id="sidebar" aria-label="Основная навигация">
       <div class="sidebar-head">
-        <a class="brand-mark" href="#dashboard" aria-label="Система учёта сотрудников">♙</a>
+        <a class="brand-mark" href="#dashboard" aria-label="Check Workerss"><img class="brand-logo-mark" src="/static/images/check-workerss-mark.png" alt="Check Workerss"></a>
         <button class="sidebar-collapse" id="sidebar-collapse" type="button" aria-label="Свернуть меню">☰</button>
       </div>
 
       <nav class="sidebar-nav">
         <button class="nav-item active" type="button" data-view="dashboard"><span>⌂</span><b>Дашборд</b></button>
-        <button class="nav-item" type="button" data-view="employees"><span>♙</span><b>Сотрудники</b></button>
+        <button class="nav-item" type="button" data-view="employees"><span><img class="nav-logo-mark" src="/static/images/check-workerss-mark.png" alt=""></span><b>Сотрудники</b></button>
         <button class="nav-item" type="button" data-view="attendance"><span>◷</span><b>Посещения</b></button>
         <button class="nav-item" type="button" data-view="reports"><span>▥</span><b>Отчёты</b></button>
         <button class="nav-item" type="button" data-view="charts"><span>▤</span><b>Графики</b></button>
@@ -45,8 +45,8 @@
       </nav>
 
       <div class="sidebar-footer">
-        <label class="theme-control" for="theme-toggle"><span><i id="theme-icon">☾</i><b>Тёмная тема</b></span><input id="theme-toggle" type="checkbox" role="switch" aria-label="Переключить тёмную тему"><em></em></label>
-        <div class="copyright">© 2026 Система учёта сотрудников<small>v1.1.0</small></div>
+        <label class="theme-control" for="theme-toggle"><span><i id="theme-icon">☾</i><b>Тёмная тема</b></span><input id="theme-toggle" type="checkbox" aria-label="Переключить тёмную тему"><em></em></label>
+        <div class="copyright">© 2026 Check Workerss<small>v2.0</small></div>
       </div>
     </aside>
 
@@ -54,7 +54,7 @@
       <header class="topbar">
         <div class="topbar-title">
           <button class="mobile-menu" id="mobile-menu" type="button" aria-label="Открыть меню">☰</button>
-          <h1 id="page-title">Система учёта сотрудников</h1>
+          <h1 id="page-title">Check Workerss</h1>
         </div>
 
         <div class="topbar-actions">
@@ -72,7 +72,7 @@
 
         <section class="app-view" data-page="dashboard">
           <section class="metrics">
-            <article class="metric-card green"><span class="metric-icon">♙</span><div><span>На работе</span><strong id="metric-working">0</strong><small>сейчас в офисе</small></div></article>
+            <article class="metric-card green"><span class="metric-icon"><img class="metric-logo-mark" src="/static/images/check-workerss-mark.png" alt=""></span><div><span>На работе</span><strong id="metric-working">0</strong><small>сейчас в офисе</small></div></article>
             <article class="metric-card blue"><span class="metric-icon">⇥</span><div><span>Пришли сегодня</span><strong id="metric-arrived">0</strong><small>за день</small></div></article>
             <article class="metric-card orange"><span class="metric-icon">⇤</span><div><span>Ушли сегодня</span><strong id="metric-left">0</strong><small>за день</small></div></article>
             <article class="metric-card purple"><span class="metric-icon">◷</span><div><span>Рабочих часов</span><strong id="metric-hours">0 ч</strong><small>сегодня</small></div></article>
@@ -231,6 +231,17 @@
               <footer><button class="button primary" type="submit">Сохранить настройки</button></footer>
             </form>
           </section>
+
+          <section class="panel admin-only">
+            <div class="panel-head"><div><h3>Профиль администратора</h3><p>Изменение имени, email и пароля текущего администратора</p></div></div>
+            <form class="settings-form" id="admin-profile-form">
+              <label>Имя<input name="full_name" required maxlength="120"></label>
+              <label>Email<input name="email" type="email" required></label>
+              <label>Текущий пароль<input name="current_password" type="password" required autocomplete="current-password"></label>
+              <label>Новый пароль<input name="new_password" type="password" minlength="10" autocomplete="new-password" placeholder="Оставьте пустым, чтобы не менять"></label>
+              <footer><button class="button primary" type="submit">Сохранить профиль</button></footer>
+            </form>
+          </section>
         </section>
 
         <section class="app-view" data-page="audit" hidden>
@@ -268,7 +279,7 @@
 
   <div class="backdrop" id="backdrop" hidden></div>
 
-  <aside class="drawer" id="drawer" aria-modal="true" role="dialog" hidden>
+  <aside class="drawer" id="drawer" aria-modal="true" hidden>
     <button class="drawer-close" id="drawer-close" type="button" aria-label="Закрыть">×</button>
 
     <section class="profile">
@@ -310,7 +321,7 @@
     </section>
   </aside>
 
-  <div class="modal" id="modal" aria-modal="true" role="dialog" hidden>
+  <div class="modal" id="modal" aria-modal="true" hidden>
     <section class="modal-panel" data-modal="employee" hidden>
       <div class="modal-head"><h2 id="employee-modal-title">Новый сотрудник</h2><button class="icon-button modal-close" type="button">×</button></div>
 
@@ -359,7 +370,7 @@
     </section>
   </div>
 
-  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="toast" id="toast" role="status"></div>
 
   <template id="employee-row-template">
     <tr class="clickable" data-employee-id="">
@@ -396,7 +407,7 @@
   </template>
 
   <template id="department-card-template">
-    <article class="mini-card department-card"><span class="metric-icon">♧</span><div><small>Подразделение</small><strong data-name></strong><p><span data-count></span> сотрудников</p></div></article>
+    <article class="mini-card department-card"><span class="metric-icon">♧</span><div><small>Подразделение</small><strong data-name></strong><p><span data-count></span> сотрудников</p></div><button class="button danger admin-only" type="button" data-delete-department>Удалить</button></article>
   </template>
 
   <template id="audit-item-template">

@@ -30,7 +30,7 @@ const state = {
   }
 };
 const titles = {
-  dashboard: "Система учёта сотрудников",
+  dashboard: "Check Workerss",
   employees: "Сотрудники",
   attendance: "Посещения",
   reports: "Отчёты",
@@ -410,6 +410,8 @@ function renderDepartments() {
     const fragment = template.content.cloneNode(true);
     fragment.querySelector("[data-name]").textContent = department.name;
     fragment.querySelector("[data-count]").textContent = department.employeeCount;
+    fragment.querySelector("[data-delete-department]").dataset.departmentId = department.id;
+    fragment.querySelector("[data-delete-department]").hidden = state.data.user.role !== "admin";
     grid.append(fragment);
   });
   empty.hidden = state.data.departments.length > 0;
@@ -421,6 +423,10 @@ function renderSettings() {
   form.elements.workday_start.value = settings.workday_start || "09:00";
   form.elements.workday_end.value = settings.workday_end || "18:00";
   form.elements.timezone.value = settings.timezone || "Europe/Moscow";
+  const profile = document.querySelector("#admin-profile-form");
+  profile.elements.full_name.value = state.data.user.name || "";
+  profile.elements.email.value = state.data.user.email || "";
+  profile.closest(".panel").hidden = state.data.user.role !== "admin";
 }
 function renderAudit() {
   const list = document.querySelector("#audit-list");
@@ -991,6 +997,30 @@ document.querySelector("#settings-form").addEventListener("submit", async (event
     settings: values
   }, "Настройки сохранены");
 });
+document.querySelector("#admin-profile-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const values = Object.fromEntries(new FormData(event.currentTarget));
+  if (!values.new_password) delete values.new_password;
+  try {
+    const response = await fetch("/api/auth/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken() },
+      body: JSON.stringify(values)
+    });
+    const data = await readJson(response);
+    if (!response.ok) throw new Error(data.detail || "Не удалось обновить профиль");
+    state.data.user.name = data.user.name;
+    state.data.user.email = data.user.email;
+    document.querySelector("#account-name").textContent = data.user.name;
+    document.querySelector("#account-avatar").textContent = initials(data.user.name);
+    event.currentTarget.elements.current_password.value = "";
+    event.currentTarget.elements.new_password.value = "";
+    render();
+    showToast(data.message);
+  } catch (error) {
+    showToast(error.message || "Ошибка", true);
+  }
+});
 document.querySelector("#employee-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const values = Object.fromEntries(new FormData(event.currentTarget));
@@ -1092,6 +1122,13 @@ document.querySelector("#archive-employee").addEventListener("click", async () =
   closeOverlay();
 });
 dom.content.addEventListener("click", async (event) => {
+  const departmentButton = event.target.closest("[data-delete-department]");
+  if (departmentButton) {
+    const department = state.data.departments.find((item) => Number(item.id) === Number(departmentButton.dataset.departmentId));
+    if (!department || !confirm(`Удалить отдел «${department.name}»?`)) return;
+    await api({ action: "deleteDepartment", id: department.id }, "Отдел удалён");
+    return;
+  }
   const auditButton = event.target.closest(".audit-approve");
   if (auditButton) {
     await approveFromAudit(auditButton);

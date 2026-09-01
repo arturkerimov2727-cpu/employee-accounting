@@ -22,9 +22,6 @@ CREATE TABLE IF NOT EXISTS sessions (
   last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-ALTER TABLE users ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS approved_by BIGINT REFERENCES users(id);
-
 CREATE TABLE IF NOT EXISTS departments (
   id BIGSERIAL PRIMARY KEY,
   name VARCHAR(120) NOT NULL UNIQUE,
@@ -45,9 +42,6 @@ CREATE TABLE IF NOT EXISTS employees (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-ALTER TABLE employees ADD COLUMN IF NOT EXISTS telegram_id BIGINT;
-ALTER TABLE employees ADD COLUMN IF NOT EXISTS email CITEXT;
-ALTER TABLE employees ADD COLUMN IF NOT EXISTS birth_date DATE;
 CREATE UNIQUE INDEX IF NOT EXISTS employees_telegram_unique_idx ON employees(telegram_id) WHERE telegram_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS employee_schedules (
@@ -101,13 +95,3 @@ CREATE TABLE IF NOT EXISTS settings (
   value VARCHAR(500) NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-CREATE INDEX IF NOT EXISTS sessions_token_idx ON sessions(token_hash);
-CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expires_at);
-CREATE INDEX IF NOT EXISTS employees_department_idx ON employees(department_id);
-CREATE INDEX IF NOT EXISTS employees_telegram_idx ON employees(telegram_id);
-CREATE INDEX IF NOT EXISTS employee_schedules_employee_idx ON employee_schedules(employee_id, weekday);
-CREATE INDEX IF NOT EXISTS employee_absences_employee_date_idx ON employee_absences(employee_id, starts_on, ends_on);
-CREATE INDEX IF NOT EXISTS attendance_employee_time_idx ON attendance_events(employee_id, event_time DESC);
-CREATE INDEX IF NOT EXISTS attendance_time_idx ON attendance_events(event_time DESC);
-CREATE INDEX IF NOT EXISTS audit_created_idx ON audit_log(created_at DESC);
