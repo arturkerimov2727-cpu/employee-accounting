@@ -14,7 +14,7 @@
 
   <div class="auth-gate" id="auth-gate">
     <section class="auth-card" aria-modal="true">
-      <img class="auth-logo" src="/static/images/check-workerss-mark.png" alt="Check Workerss">
+      <span class="auth-logo">CW</span>
       <small>CHECK WORKERSS</small>
       <h2>Вход в систему</h2>
       <p id="auth-message">Проверяем ваш доступ к панели управления</p>
@@ -27,13 +27,13 @@
   <div class="app-shell" id="app-shell">
     <aside class="sidebar" id="sidebar" aria-label="Основная навигация">
       <div class="sidebar-head">
-        <a class="brand-mark" href="#dashboard" aria-label="Check Workerss"><img class="brand-logo-mark" src="/static/images/check-workerss-mark.png" alt="Check Workerss"></a>
+        <a class="brand-mark" href="#dashboard" aria-label="Check Workerss">Check Workerss</a>
         <button class="sidebar-collapse" id="sidebar-collapse" type="button" aria-label="Свернуть меню">☰</button>
       </div>
 
       <nav class="sidebar-nav">
         <button class="nav-item active" type="button" data-view="dashboard"><span>⌂</span><b>Дашборд</b></button>
-        <button class="nav-item" type="button" data-view="employees"><span><img class="nav-logo-mark" src="/static/images/check-workerss-mark.png" alt=""></span><b>Сотрудники</b></button>
+        <button class="nav-item" type="button" data-view="employees"><span>◉</span><b>Сотрудники</b></button>
         <button class="nav-item" type="button" data-view="attendance"><span>◷</span><b>Посещения</b></button>
         <button class="nav-item" type="button" data-view="reports"><span>▥</span><b>Отчёты</b></button>
         <button class="nav-item" type="button" data-view="charts"><span>▤</span><b>Графики</b></button>
@@ -72,7 +72,7 @@
 
         <section class="app-view" data-page="dashboard">
           <section class="metrics">
-            <article class="metric-card green"><span class="metric-icon"><img class="metric-logo-mark" src="/static/images/check-workerss-mark.png" alt=""></span><div><span>На работе</span><strong id="metric-working">0</strong><small>сейчас в офисе</small></div></article>
+            <article class="metric-card green"><span class="metric-icon">✓</span><div><span>На работе</span><strong id="metric-working">0</strong><small>сейчас в офисе</small></div></article>
             <article class="metric-card blue"><span class="metric-icon">⇥</span><div><span>Пришли сегодня</span><strong id="metric-arrived">0</strong><small>за день</small></div></article>
             <article class="metric-card orange"><span class="metric-icon">⇤</span><div><span>Ушли сегодня</span><strong id="metric-left">0</strong><small>за день</small></div></article>
             <article class="metric-card purple"><span class="metric-icon">◷</span><div><span>Рабочих часов</span><strong id="metric-hours">0 ч</strong><small>сегодня</small></div></article>
