@@ -13,8 +13,8 @@ const dom = {
   themeToggle: document.querySelector("#theme-toggle"),
   themeIcon: document.querySelector("#theme-icon")
 };
-const todayKey = new Date().toISOString().slice(0, 10);
-const monthStart = `${todayKey.slice(0, 7)}-01`;
+let todayKey = AttendanceTime.browserDateKey();
+let monthStart = `${todayKey.slice(0, 7)}-01`;
 const state = {
   data: null,
   view: location.hash.slice(1) || "dashboard",
@@ -79,14 +79,27 @@ async function unlockApp() {
 function initials(name = "") {
   return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "С";
 }
+function appTimeZone() {
+  const candidate = state.data?.settings?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Moscow";
+  return AttendanceTime.validTimeZone(candidate);
+}
+function syncCalendarBounds() {
+  const previousToday = todayKey;
+  const nextToday = AttendanceTime.dateKey(new Date(), appTimeZone());
+  todayKey = nextToday;
+  monthStart = `${todayKey.slice(0, 7)}-01`;
+  if (state.filters.from === previousToday) state.filters.from = todayKey;
+  if (state.filters.to === previousToday) state.filters.to = todayKey;
+}
 function formatDate(value, options = {}) {
   if (!value) return "-";
-  const date = new Date(`${value.slice(0, 10)}T12:00:00Z`);
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const date = new Date(dateOnly ? `${value}T12:00:00Z` : value);
   return new Intl.DateTimeFormat("ru-RU", {
     day: "numeric",
     month: "long",
     ...options,
-    timeZone: "UTC"
+    timeZone: dateOnly ? "UTC" : appTimeZone()
   }).format(date);
 }
 function formatTime(value) {
@@ -94,7 +107,7 @@ function formatTime(value) {
   return new Intl.DateTimeFormat("ru-RU", {
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "UTC"
+    timeZone: appTimeZone()
   }).format(new Date(value));
 }
 function durationLabel(minutes) {
@@ -109,13 +122,13 @@ function employeeSessions(employeeId, from = "0000-01-01", to = "9999-12-31") {
   const events = state.data.events
     .filter((event) => Number(event.employeeId) === Number(employeeId))
     .filter((event) => {
-      const day = event.eventTime.slice(0, 10);
+      const day = AttendanceTime.dateKey(event.eventTime, appTimeZone());
       return day >= from && day <= to;
     })
     .sort((a, b) => a.eventTime.localeCompare(b.eventTime));
   const days = new Map();
   events.forEach((event) => {
-    const day = event.eventTime.slice(0, 10);
+    const day = AttendanceTime.dateKey(event.eventTime, appTimeZone());
     if (!days.has(day)) {
       days.set(day, {
         date: day,
@@ -274,7 +287,7 @@ function renderEmployeeTable(name, rows, period = false) {
 }
 function lastDays(count) {
   return Array.from({ length: count }, (_, index) => {
-    const date = new Date();
+    const date = new Date(`${todayKey}T12:00:00Z`);
     date.setUTCDate(date.getUTCDate() - (count - index - 1));
     return date.toISOString().slice(0, 10);
   });
@@ -397,7 +410,8 @@ function renderReports() {
 function renderCharts() {
   const days = lastDays(14);
   const charts = AttendanceCharts.drawAttendanceCharts(
-    "monthly-chart", "time-chart", days, days.map((day) => totalForDay(day) / 60), state.data.events
+    "monthly-chart", "time-chart", days, days.map((day) => totalForDay(day) / 60),
+    state.data.events, appTimeZone()
   );
   state.charts.push(...charts);
 }
@@ -489,11 +503,7 @@ async function renderUsers() {
   }
   loading.hidden = false;
   try {
-    const response = await fetch("/api/users", {
-      headers: { Accept: "application/json" },
-      cache: "no-store"
-    });
-    const data = await readJson(response);
+    const [response, data] = await requestJson("/api/users", { cache: "no-store" });
     if (!response.ok) {
       throw new Error(data.detail || "Не удалось загрузить пользователей");
     }
@@ -650,7 +660,7 @@ function openEventModal() {
     "Выберите сотрудника"
   );
   form.elements.eventType.value = "IN";
-  form.elements.eventTime.value = new Date().toISOString().slice(0, 16);
+  form.elements.eventTime.value = AttendanceTime.inputValue(new Date(), appTimeZone());
   openOverlay("modal");
 }
 function openDepartmentModal() {
@@ -668,14 +678,14 @@ function showModalPanel(name) {
   return selected;
 }
 async function quickEvent(employee, eventType) {
-  await api({
+  const saved = await api({
     action: "addEvent",
     employeeId: employee.id,
     eventType,
     eventTime: new Date().toISOString(),
     comment: "Отмечено администратором на сайте"
   }, eventType === "IN" ? "Приход отмечен" : "Уход отмечен");
-  closeOverlay();
+  if (saved) closeOverlay();
 }
 function openOverlay(type) {
   dom.backdrop.hidden = false;
@@ -695,42 +705,13 @@ function switchView(view) {
   dom.sidebar.classList.remove("open");
   render();
 }
-function exportCsv(rows) {
-  const cells = [
-    ["Сотрудник", "Отдел", "Период", "Часы"],
-    ...rows.map((row) => [
-      row.fullName,
-      row.department,
-      `${state.filters.from} - ${state.filters.to}`,
-      Math.round(row.totalMinutes / 6) / 10
-    ])
-  ];
-  const csv = cells
-    .map((row) =>
-      row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(";")
-    )
-    .join("\n");
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(
-    new Blob(["\ufeff", csv], {
-      type: "text/csv;charset=utf-8"
-    })
-  );
-  link.download = `attendance-${state.filters.from}-${state.filters.to}.csv`;
-  link.click();
-  URL.revokeObjectURL(link.href);
-}
 async function api(payload, successMessage) {
   try {
-    const response = await fetch("/api/system", {
+    const [response, data] = await requestJson("/api/system", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRF-Token": csrfToken()
-      },
-      body: JSON.stringify(payload)
+      csrf: true,
+      json: payload
     });
-    const data = await readJson(response);
     if (response.status === 401) {
       location.href = safeSignInPath(data.signInPath);
       return;
@@ -739,11 +720,13 @@ async function api(payload, successMessage) {
       throw new Error(data.detail || data.error || "Не удалось сохранить данные");
     }
     state.data = data;
+    syncCalendarBounds();
     showToast(successMessage);
     render();
+    return true;
   } catch (error) {
     showToast(error.message || "Ошибка", true);
-    throw error;
+    return false;
   }
 }
 async function readJson(response) {
@@ -751,15 +734,28 @@ async function readJson(response) {
   const text = await response.text().catch(() => "");
   return { detail: response.status >= 500 ? "Ошибка сервера. Повторите попытку позже." : text.trim() || "Сервер вернул пустой ответ" };
 }
+function formValues(form) {
+  return Object.fromEntries(new FormData(form));
+}
+async function requestJson(url, { json, csrf = false, headers = {}, ...options } = {}) {
+  const requestHeaders = { Accept: "application/json", ...headers };
+  if (json !== undefined) requestHeaders["Content-Type"] = "application/json";
+  if (csrf) requestHeaders["X-CSRF-Token"] = csrfToken();
+  const response = await fetch(url, {
+    ...options,
+    headers: requestHeaders,
+    ...(json === undefined ? {} : { body: JSON.stringify(json) })
+  });
+  return [response, await readJson(response)];
+}
 async function loadEmployeeInsights(employeeId, period = "month") {
   try {
-    const [summaryResponse, calendarResponse, scheduleResponse] = await Promise.all([
-      fetch(`/api/attendance/employees/${employeeId}/summary?period=${period}`),
-      fetch(`/api/attendance/employees/${employeeId}/calendar`),
-      fetch(`/api/attendance/employees/${employeeId}/schedule`)
+    const [[summaryResponse, summary], [calendarResponse, calendar], [scheduleResponse, schedule]] = await Promise.all([
+      requestJson(`/api/attendance/employees/${employeeId}/summary?period=${period}`),
+      requestJson(`/api/attendance/employees/${employeeId}/calendar`),
+      requestJson(`/api/attendance/employees/${employeeId}/schedule`)
     ]);
-    const [summary, calendar, schedule] = await Promise.all([readJson(summaryResponse), readJson(calendarResponse), readJson(scheduleResponse)]);
-    if (!summaryResponse.ok || !calendarResponse.ok || !scheduleResponse.ok) throw new Error(summary.detail || calendar.detail || "Не удалось загрузить статистику");
+    if (!summaryResponse.ok || !calendarResponse.ok || !scheduleResponse.ok) throw new Error(summary.detail || calendar.detail || schedule.detail || "Не удалось загрузить статистику");
     const stats = summary.statistics;
     const cells = [["Смен", stats.shifts], ["Время", durationLabel(stats.workedMinutes)], ["Опоздания", `${stats.lateCount} / ${stats.lateMinutes} мин`], ["Ранние уходы", `${stats.earlyLeaveCount} / ${stats.earlyLeaveMinutes} мин`], ["Переработка", durationLabel(stats.overtimeMinutes)], ["Отсутствия", stats.approvedAbsences]];
     document.querySelector("#employee-stats").innerHTML = cells.map(([name, value]) => `<div class="detail-cell"><small>${name}</small><strong>${value}</strong></div>`).join("");
@@ -775,11 +771,22 @@ async function renderLateness() {
   const to = document.querySelector("#lateness-to");
   from.value ||= monthStart;
   to.value ||= todayKey;
-  const response = await fetch(`/api/attendance/analytics/lateness?from=${from.value}&to=${to.value}`);
-  const data = await readJson(response);
+  const result = await requestJson(`/api/attendance/analytics/lateness?from=${from.value}&to=${to.value}`).catch(() => null);
+  if (!result) { showToast("Сервер недоступен", true); return; }
+  const [response, data] = result;
   if (!response.ok) { showToast(data.detail || "Не удалось загрузить аналитику", true); return; }
   const body = document.querySelector("#lateness-body");
-  body.innerHTML = data.rows.map((row) => `<tr><td>${row.fullName}</td><td>${row.department}</td><td>${row.lateCount}</td><td>${durationLabel(row.lateMinutes)}</td><td>${durationLabel(row.averageLateMinutes)}</td><td>${durationLabel(row.overtimeMinutes)}</td></tr>`).join("");
+  body.replaceChildren(...data.rows.map((row) => {
+    const tr = document.createElement("tr");
+    [row.fullName, row.department, row.lateCount, durationLabel(row.lateMinutes),
+      durationLabel(row.averageLateMinutes), durationLabel(row.overtimeMinutes)]
+      .forEach((value) => {
+        const td = document.createElement("td");
+        td.textContent = value;
+        tr.append(td);
+      });
+    return tr;
+  }));
   document.querySelector("#lateness-empty").hidden = data.rows.length > 0;
 }
 function exportServerReport(format) {
@@ -795,20 +802,18 @@ function csrfToken() {
   if (!item) return "";
   return decodeURIComponent(item.split("=").slice(1).join("="));
 }
+async function saveUserAccess(id, status, role) {
+  const [response, data] = await requestJson(`/api/users/${id}`, {
+    method: "PATCH",
+    csrf: true,
+    json: { status, role }
+  });
+  if (!response.ok) throw new Error(data.detail || "Не удалось обновить доступ");
+  return data;
+}
 async function updateUser(id, status, role) {
   try {
-    const response = await fetch(`/api/users/${id}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRF-Token": csrfToken()
-      },
-      body: JSON.stringify({ status, role })
-    });
-    const data = await readJson(response);
-    if (!response.ok) {
-      throw new Error(data.detail || "Не удалось обновить доступ");
-    }
+    const data = await saveUserAccess(id, status, role);
     showToast(data.message);
     if (state.view === "users") await renderUsers();
   } catch (error) {
@@ -820,21 +825,7 @@ async function approveFromAudit(button) {
   button.disabled = true;
   button.textContent = "Одобряем...";
   try {
-    const response = await fetch(`/api/users/${userId}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRF-Token": csrfToken()
-      },
-      body: JSON.stringify({
-        status: "active",
-        role: "viewer"
-      })
-    });
-    const data = await readJson(response);
-    if (!response.ok) {
-      throw new Error(data.detail || "Не удалось одобрить пользователя");
-    }
+    await saveUserAccess(userId, "active", "viewer");
     state.data.notifications.pendingUserIds = state.data.notifications.pendingUserIds
       .filter((id) => Number(id) !== userId);
     button.hidden = true;
@@ -847,12 +838,7 @@ async function approveFromAudit(button) {
   }
 }
 async function logout() {
-  const response = await fetch("/api/auth/logout", {
-    method: "POST",
-    headers: {
-      "X-CSRF-Token": csrfToken()
-    }
-  });
+  const [response] = await requestJson("/api/auth/logout", { method: "POST", csrf: true });
   if (response.ok || response.status === 401) {
     location.replace("/login");
     return;
@@ -869,11 +855,7 @@ function showToast(message, error = false) {
 }
 async function load() {
   try {
-    const response = await fetch("/api/system", {
-      headers: { Accept: "application/json" },
-      cache: "no-store"
-    });
-    const data = await readJson(response);
+    const [response, data] = await requestJson("/api/system", { cache: "no-store" });
     if (response.status === 401) {
       showSignInGate(data.signInPath);
       return;
@@ -882,6 +864,7 @@ async function load() {
       throw new Error(data.detail || data.error || "Не удалось загрузить данные");
     }
     state.data = data;
+    syncCalendarBounds();
     const displayName = data.user?.name || "Администратор";
     document.querySelector("#account-name").textContent = displayName;
     document.querySelector("#account-avatar").textContent = initials(displayName);
@@ -895,7 +878,8 @@ async function load() {
       `▣  ${new Intl.DateTimeFormat("ru-RU", {
         day: "numeric",
         month: "long",
-        year: "numeric"
+        year: "numeric",
+        timeZone: appTimeZone()
       }).format(new Date())}`;
     render();
     await unlockApp();
@@ -944,8 +928,6 @@ document.querySelector("#chart-period").addEventListener("change", (event) => {
   if (state.view !== "dashboard") return;
   state.charts.forEach((chart) => chart.destroy());
   state.charts = [];
-  state.charts.forEach((chart) => chart.destroy());
-  state.charts = [];
   const days = lastDays(Number(event.target.value));
   const chart = AttendanceCharts.drawHoursChart("hours-chart", days, days.map((day) => totalForDay(day) / 60));
   if (chart) state.charts.push(chart);
@@ -991,7 +973,7 @@ document.querySelector("#export-pdf").addEventListener("click", () => exportServ
 document.querySelector("#load-lateness").addEventListener("click", renderLateness);
 document.querySelector("#settings-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const values = Object.fromEntries(new FormData(event.currentTarget));
+  const values = formValues(event.currentTarget);
   await api({
     action: "updateSettings",
     settings: values
@@ -999,15 +981,14 @@ document.querySelector("#settings-form").addEventListener("submit", async (event
 });
 document.querySelector("#admin-profile-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const values = Object.fromEntries(new FormData(event.currentTarget));
+  const values = formValues(event.currentTarget);
   if (!values.new_password) delete values.new_password;
   try {
-    const response = await fetch("/api/auth/profile", {
+    const [response, data] = await requestJson("/api/auth/profile", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken() },
-      body: JSON.stringify(values)
+      csrf: true,
+      json: values
     });
-    const data = await readJson(response);
     if (!response.ok) throw new Error(data.detail || "Не удалось обновить профиль");
     state.data.user.name = data.user.name;
     state.data.user.email = data.user.email;
@@ -1023,40 +1004,40 @@ document.querySelector("#admin-profile-form").addEventListener("submit", async (
 });
 document.querySelector("#employee-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const values = Object.fromEntries(new FormData(event.currentTarget));
+  const values = formValues(event.currentTarget);
   const employee = state.editingEmployee;
   if (!values.telegramId) delete values.telegramId;
   else values.telegramId = Number(values.telegramId);
   if (!values.email) delete values.email;
   if (!values.birthDate) delete values.birthDate;
-  await api({
+  const saved = await api({
     action: employee ? "updateEmployee" : "createEmployee",
     id: employee?.id,
     ...values,
     departmentId: Number(values.departmentId)
   }, employee ? "Данные сотрудника обновлены" : "Сотрудник добавлен");
-  closeOverlay();
+  if (saved) closeOverlay();
 });
 document.querySelector("#event-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const values = Object.fromEntries(new FormData(event.currentTarget));
-  await api({
+  const values = formValues(event.currentTarget);
+  const saved = await api({
     action: "addEvent",
     employeeId: Number(values.employeeId),
     eventType: values.eventType,
-    eventTime: new Date(values.eventTime).toISOString(),
+    eventTime: AttendanceTime.inputToIso(values.eventTime, appTimeZone()),
     comment: values.comment
   }, "Событие записано");
-  closeOverlay();
+  if (saved) closeOverlay();
 });
 document.querySelector("#department-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const values = Object.fromEntries(new FormData(event.currentTarget));
-  await api({
+  const values = formValues(event.currentTarget);
+  const saved = await api({
     action: "createDepartment",
     name: values.name
   }, "Отдел создан");
-  closeOverlay();
+  if (saved) closeOverlay();
 });
 document.querySelector("#edit-employee").addEventListener("click", () => {
   const id = Number(dom.drawer.dataset.employeeId);
@@ -1072,8 +1053,7 @@ document.querySelector("#employee-period").addEventListener("click", (event) => 
 document.querySelector("#edit-schedule").addEventListener("click", async () => {
   const employeeId = Number(dom.drawer.dataset.employeeId);
   if (!employeeId) return;
-  const response = await fetch(`/api/attendance/employees/${employeeId}/schedule`);
-  const data = await readJson(response);
+  const [response, data] = await requestJson(`/api/attendance/employees/${employeeId}/schedule`);
   if (!response.ok) return showToast(data.detail || "Не удалось загрузить график", true);
   const names = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
   document.querySelector("#schedule-fields").innerHTML = data.schedule.map((row) => `<label class="schedule-editor-row"><span>${names[row.weekday]}</span><input type="checkbox" data-workday ${row.isWorkday ? "checked" : ""}><input type="time" data-start value="${row.startsAt || "09:00"}"><input type="time" data-end value="${row.endsAt || "18:00"}></label>`).join("");
@@ -1083,8 +1063,7 @@ document.querySelector("#schedule-form").addEventListener("submit", async (event
   event.preventDefault();
   const employeeId = Number(dom.drawer.dataset.employeeId);
   const schedule = [...document.querySelectorAll("#schedule-fields .schedule-editor-row")].map((row, weekday) => ({ weekday, isWorkday: row.querySelector("[data-workday]").checked, startsAt: row.querySelector("[data-start]").value, endsAt: row.querySelector("[data-end]").value }));
-  const response = await fetch(`/api/attendance/employees/${employeeId}/schedule`, { method: "PUT", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken() }, body: JSON.stringify({ schedule }) });
-  const data = await readJson(response);
+  const [response, data] = await requestJson(`/api/attendance/employees/${employeeId}/schedule`, { method: "PUT", csrf: true, json: { schedule } });
   if (!response.ok) return showToast(data.detail || "Не удалось сохранить график", true);
   closeOverlay(); showToast("График сохранён"); loadEmployeeInsights(employeeId);
 });
@@ -1096,10 +1075,9 @@ document.querySelector("#add-absence").addEventListener("click", () => {
 });
 document.querySelector("#absence-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const values = Object.fromEntries(new FormData(event.currentTarget));
+  const values = formValues(event.currentTarget);
   values.employeeId = Number(dom.drawer.dataset.employeeId);
-  const response = await fetch("/api/attendance/absences", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken() }, body: JSON.stringify(values) });
-  const data = await readJson(response);
+  const [response, data] = await requestJson("/api/attendance/absences", { method: "POST", csrf: true, json: values });
   if (!response.ok) return showToast(data.detail || "Не удалось сохранить отсутствие", true);
   closeOverlay(); showToast(data.message); loadEmployeeInsights(values.employeeId);
 });
@@ -1115,11 +1093,11 @@ document.querySelector("#archive-employee").addEventListener("click", async () =
   const employee = state.data.employees.find((item) => Number(item.id) === id);
   if (!employee) return;
   if (!confirm(`Удалить сотрудника «${employee.fullName}» из активного списка? История посещений сохранится.`)) return;
-  await api({
+  const archived = await api({
     action: "archiveEmployee",
     id: employee.id
   }, "Сотрудник удалён из активного списка");
-  closeOverlay();
+  if (archived) closeOverlay();
 });
 dom.content.addEventListener("click", async (event) => {
   const departmentButton = event.target.closest("[data-delete-department]");

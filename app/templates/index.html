@@ -1,4 +1,27 @@
-<!DOCTYPE  html>
+{% macro employee_filters(name) -%}
+<div class="filters filter-set" data-filter-set="{{ name }}">
+  <label class="search-filter">Поиск<div class="search-control"><input data-filter="query" placeholder="Поиск по сотруднику..."><span>⌕</span></div></label>
+  <label>Сотрудник<select data-filter="employee"></select></label>
+  <label>Отдел<select data-filter="department"></select></label>
+  <label>Период<div class="split-dates"><input data-filter="from" type="date"><input data-filter="to" type="date"></div></label>
+  <label>Статус<select data-filter="status"><option value="">Все</option><option value="На работе">На работе</option><option value="Ушёл">Ушёл</option><option value="Нет данных">Нет данных</option></select></label>
+  <button class="button" type="button" data-action="reset-filters">Сбросить</button>
+  <button class="button primary" type="button" data-action="apply-filters">Применить</button>
+</div>
+{%- endmacro %}
+{% macro employee_table(name) -%}
+<div class="employee-table-block" data-table="{{ name }}">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Сотрудник</th><th>Отдел</th><th>Приход</th><th>Уход</th><th>Время</th><th>Статус</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div class="empty" data-empty hidden>По заданным фильтрам ничего не найдено</div>
+  <div class="table-footer"><span>Показано: <b data-shown>0</b></span><span>Всего сотрудников: <b data-total>0</b></span></div>
+</div>
+{%- endmacro %}
+<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="utf-8">
@@ -7,6 +30,7 @@
   <title>Check Workerss</title>
   <link rel="stylesheet" href="/static/css/app.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
+  <script src="/static/js/time.js" defer></script>
   <script src="/static/js/charts.js" defer></script>
   <script src="/static/js/app.js" defer></script>
 </head>
@@ -96,26 +120,8 @@
           </section>
 
           <section class="panel">
-            <div class="filters filter-set" data-filter-set="dashboard">
-              <label class="search-filter">Поиск<div class="search-control"><input data-filter="query" placeholder="Поиск по сотруднику..."><span>⌕</span></div></label>
-              <label>Сотрудник<select data-filter="employee"></select></label>
-              <label>Отдел<select data-filter="department"></select></label>
-              <label>Период<div class="split-dates"><input data-filter="from" type="date"><input data-filter="to" type="date"></div></label>
-              <label>Статус<select data-filter="status"><option value="">Все</option><option value="На работе">На работе</option><option value="Ушёл">Ушёл</option><option value="Нет данных">Нет данных</option></select></label>
-              <button class="button" type="button" data-action="reset-filters">Сбросить</button>
-              <button class="button primary" type="button" data-action="apply-filters">Применить</button>
-            </div>
-
-            <div class="employee-table-block" data-table="dashboard">
-              <div class="table-wrap">
-                <table>
-                  <thead><tr><th>Сотрудник</th><th>Отдел</th><th>Приход</th><th>Уход</th><th>Время</th><th>Статус</th><th></th></tr></thead>
-                  <tbody></tbody>
-                </table>
-              </div>
-              <div class="empty" data-empty hidden>По заданным фильтрам ничего не найдено</div>
-              <div class="table-footer"><span>Показано: <b data-shown>0</b></span><span>Всего сотрудников: <b data-total>0</b></span></div>
-            </div>
+            {{ employee_filters("dashboard") }}
+            {{ employee_table("dashboard") }}
           </section>
         </section>
 
@@ -128,16 +134,7 @@
               <span></span><span></span><span></span><span></span><span></span><span></span>
             </div>
 
-            <div class="employee-table-block" data-table="employees">
-              <div class="table-wrap">
-                <table>
-                  <thead><tr><th>Сотрудник</th><th>Отдел</th><th>Приход</th><th>Уход</th><th>Время</th><th>Статус</th><th></th></tr></thead>
-                  <tbody></tbody>
-                </table>
-              </div>
-              <div class="empty" data-empty hidden>По заданным фильтрам ничего не найдено</div>
-              <div class="table-footer"><span>Показано: <b data-shown>0</b></span><span>Всего сотрудников: <b data-total>0</b></span></div>
-            </div>
+            {{ employee_table("employees") }}
           </section>
         </section>
 
@@ -177,26 +174,8 @@
           </section>
 
           <section class="panel">
-            <div class="filters filter-set" data-filter-set="reports">
-              <label class="search-filter">Поиск<div class="search-control"><input data-filter="query" placeholder="Поиск по сотруднику..."><span>⌕</span></div></label>
-              <label>Сотрудник<select data-filter="employee"></select></label>
-              <label>Отдел<select data-filter="department"></select></label>
-              <label>Период<div class="split-dates"><input data-filter="from" type="date"><input data-filter="to" type="date"></div></label>
-              <label>Статус<select data-filter="status"><option value="">Все</option><option value="На работе">На работе</option><option value="Ушёл">Ушёл</option><option value="Нет данных">Нет данных</option></select></label>
-              <button class="button" type="button" data-action="reset-filters">Сбросить</button>
-              <button class="button primary" type="button" data-action="apply-filters">Применить</button>
-            </div>
-
-            <div class="employee-table-block" data-table="reports">
-              <div class="table-wrap">
-                <table>
-                  <thead><tr><th>Сотрудник</th><th>Отдел</th><th>Приход</th><th>Уход</th><th>Время</th><th>Статус</th><th></th></tr></thead>
-                  <tbody></tbody>
-                </table>
-              </div>
-              <div class="empty" data-empty hidden>По заданным фильтрам ничего не найдено</div>
-              <div class="table-footer"><span>Показано: <b data-shown>0</b></span><span>Всего сотрудников: <b data-total>0</b></span></div>
-            </div>
+            {{ employee_filters("reports") }}
+            {{ employee_table("reports") }}
           </section>
         </section>
 

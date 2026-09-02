@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from websockets.version import commit
 
 from ..dependencies import AuthContext, get_pool, require_roles, require_csrf_roles
 from app.schemas.schemas import UserStatusRequest
@@ -32,26 +31,33 @@ async def update_user(
     if user_id == actor.user_id and payload.status == "disabled":
         raise HTTPException(status.HTTP_409_CONFLICT, "Нельзя отключить собственный аккаунт")
     pool = get_pool(request)
-    target = await pool.fetchrow("SELECT email::text, role FROM users WHERE id = $1", user_id)
-    if not target:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")
-    role = payload.role or target["role"]
-    removing_active_admin = target["role"] == "admin" and (role != "admin" or payload.status != "active")
-    if removing_active_admin:
-        admin_count = await pool.fetchval("SELECT count(*) FROM users WHERE role = 'admin' AND status = 'active'")
-        if admin_count <= 1:
-            raise HTTPException(status.HTTP_409_CONFLICT, "В системе должен остаться хотя бы один активный администратор")
-    await pool.execute(
-        """UPDATE users SET status = $1, role = $2,
-           approved_at = CASE WHEN $1::varchar(20) = 'active' THEN COALESCE(approved_at, now()) ELSE approved_at END
-           WHERE id = $3""",
-        payload.status, role, user_id,
-    )
-    if payload.status == "disabled":
-        await pool.execute("DELETE FROM sessions WHERE user_id = $1", user_id)
-    await pool.execute(
-        """INSERT INTO audit_log (actor, action, entity_type, entity_id, details)
-           VALUES ($1, 'UPDATE_ACCESS', 'user', $2, $3)""",
-        actor.email, user_id, f"Права {target['email']}: {role}, {payload.status}",
-    )
+    async with pool.acquire() as connection:
+        async with connection.transaction():
+            await connection.execute("SELECT pg_advisory_xact_lock($1::bigint)", 72819464)
+            target = await connection.fetchrow(
+                "SELECT email::text, role FROM users WHERE id = $1 FOR UPDATE",
+                user_id,
+            )
+            if not target:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")
+            role = payload.role or target["role"]
+            removing_active_admin = target["role"] == "admin" and (role != "admin" or payload.status != "active")
+            if removing_active_admin:
+                admin_count = await connection.fetchval("SELECT count(*) FROM users WHERE role = 'admin' AND status = 'active'")
+                if admin_count <= 1:
+                    raise HTTPException(status.HTTP_409_CONFLICT, "В системе должен остаться хотя бы один активный администратор")
+            await connection.execute(
+                """UPDATE users SET status = $1, role = $2,
+                   approved_at = CASE WHEN $1::varchar(20) = 'active' THEN COALESCE(approved_at, now()) ELSE approved_at END,
+                   approved_by = CASE WHEN $1::varchar(20) = 'active' THEN COALESCE(approved_by, $3) ELSE approved_by END
+                   WHERE id = $4""",
+                payload.status, role, actor.user_id, user_id,
+            )
+            if payload.status == "disabled":
+                await connection.execute("DELETE FROM sessions WHERE user_id = $1", user_id)
+            await connection.execute(
+                """INSERT INTO audit_log (actor, action, entity_type, entity_id, details)
+                   VALUES ($1, 'UPDATE_ACCESS', 'user', $2, $3)""",
+                actor.email, user_id, f"Права {target['email']}: {role}, {payload.status}",
+            )
     return {"message": "Доступ пользователя обновлён"}

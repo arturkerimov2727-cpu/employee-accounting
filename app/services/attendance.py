@@ -14,6 +14,9 @@ ABSENCE_LABELS = {
     "approved_absence": "Разрешённое отсутствие",
 }
 
+SCHEDULE_QUERY = """SELECT weekday, is_workday, starts_at, ends_at
+                    FROM employee_schedules WHERE employee_id=$1 ORDER BY weekday"""
+
 
 def get_timezone(name):
     try:
@@ -24,6 +27,32 @@ def get_timezone(name):
 
 def minutes_between(start, end):
     return max(0, round((end - start).total_seconds() / 60))
+
+
+def require_aware_datetime(value):
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "Дата и время должны содержать часовой пояс",
+        )
+    return value
+
+
+def validate_event_sequence(events):
+    expected = "IN"
+    previous_time = None
+    for event in events:
+        event_time = require_aware_datetime(event["event_time"])
+        if previous_time is not None and event_time <= previous_time:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "События сотрудника должны идти в строгом хронологическом порядке",
+            )
+        if event["event_type"] != expected:
+            message = "Сначала отметьте приход" if expected == "IN" else "Сначала отметьте уход"
+            raise HTTPException(status.HTTP_409_CONFLICT, message)
+        expected = "OUT" if expected == "IN" else "IN"
+        previous_time = event_time
 
 
 async def settings_map(connection):
@@ -41,8 +70,13 @@ async def write_audit(connection, actor, action, entity_type, entity_id, details
 
 async def ensure_default_schedule(connection, employee_id, settings=None):
     settings = settings or await settings_map(connection)
-    start = time.fromisoformat(settings.get("workday_start", "09:00"))
-    end = time.fromisoformat(settings.get("workday_end", "18:00"))
+    try:
+        start = time.fromisoformat(settings.get("workday_start", "09:00"))
+        end = time.fromisoformat(settings.get("workday_end", "18:00"))
+        if start >= end:
+            raise ValueError
+    except (TypeError, ValueError):
+        start, end = time(9), time(18)
     await connection.execute(
         """INSERT INTO employee_schedules (employee_id, weekday, is_workday, starts_at, ends_at)
            SELECT $1, weekday, weekday < 5,
@@ -55,12 +89,10 @@ async def ensure_default_schedule(connection, employee_id, settings=None):
 
 
 async def schedule_for_employee(connection, employee_id):
-    await ensure_default_schedule(connection, employee_id)
-    rows = await connection.fetch(
-        """SELECT weekday, is_workday, starts_at, ends_at
-           FROM employee_schedules WHERE employee_id=$1 ORDER BY weekday""",
-        employee_id,
-    )
+    rows = await connection.fetch(SCHEDULE_QUERY, employee_id)
+    if len(rows) != 7:
+        await ensure_default_schedule(connection, employee_id)
+        rows = await connection.fetch(SCHEDULE_QUERY, employee_id)
     return [
         {"weekday": row["weekday"], "isWorkday": row["is_workday"],
          "startsAt": row["starts_at"].strftime("%H:%M") if row["starts_at"] else None,
@@ -70,18 +102,31 @@ async def schedule_for_employee(connection, employee_id):
 
 
 async def update_schedule(connection, employee_id, schedule, actor):
-    if len(schedule) != 7 or {item.get("weekday") for item in schedule} != set(range(7)):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "График должен содержать все дни недели")
+    if (
+        not isinstance(schedule, list)
+        or not all(isinstance(item, dict) for item in schedule)
+        or len(schedule) != 7
+        or {item.get("weekday") for item in schedule} != set(range(7))
+    ):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "График должен содержать все дни недели")
     for item in schedule:
         weekday = item["weekday"]
         is_workday = bool(item.get("isWorkday"))
         starts_at = item.get("startsAt") if is_workday else None
         ends_at = item.get("endsAt") if is_workday else None
-        if is_workday and (not starts_at or not ends_at or starts_at >= ends_at):
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Укажите корректное время смены")
+        if is_workday and (not starts_at or not ends_at):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Укажите корректное время смены")
         if is_workday:
-            starts_at = time.fromisoformat(starts_at)
-            ends_at = time.fromisoformat(ends_at)
+            try:
+                starts_at = time.fromisoformat(starts_at)
+                ends_at = time.fromisoformat(ends_at)
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    "Укажите корректное время смены",
+                ) from exc
+            if starts_at >= ends_at:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Укажите корректное время смены")
         await connection.execute(
             """INSERT INTO employee_schedules (employee_id, weekday, is_workday, starts_at, ends_at, updated_at)
                VALUES ($1, $2, $3, $4::time, $5::time, now())
@@ -98,21 +143,22 @@ async def record_attendance_event(
     connection, employee_id, event_type, actor, source, event_time=None, comment="",
 ):
     if event_type not in {"IN", "OUT"}:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Некорректный тип события")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Некорректный тип события")
     employee = await connection.fetchrow(
         "SELECT id, full_name FROM employees WHERE id=$1 AND active=TRUE FOR UPDATE", employee_id,
     )
     if not employee:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Сотрудник не найден")
-    last = await connection.fetchrow(
-        """SELECT event_type FROM attendance_events WHERE employee_id=$1
-           ORDER BY event_time DESC, id DESC LIMIT 1 FOR UPDATE""", employee_id,
+    when = require_aware_datetime(event_time or datetime.now(timezone.utc))
+    rows = await connection.fetch(
+        """SELECT id, event_type, event_time FROM attendance_events
+           WHERE employee_id=$1 ORDER BY event_time, id FOR UPDATE""",
+        employee_id,
     )
-    if event_type == "IN" and last and last["event_type"] == "IN":
-        raise HTTPException(status.HTTP_409_CONFLICT, "У сотрудника уже есть незавершённая смена")
-    if event_type == "OUT" and (not last or last["event_type"] != "IN"):
-        raise HTTPException(status.HTTP_409_CONFLICT, "Сначала отметьте приход")
-    when = event_time or datetime.now(timezone.utc)
+    sequence = [dict(row) for row in rows]
+    sequence.append({"id": None, "event_type": event_type, "event_time": when})
+    sequence.sort(key=lambda item: (item["event_time"], item["id"] is None, item["id"] or 0))
+    validate_event_sequence(sequence)
     event_id = await connection.fetchval(
         """INSERT INTO attendance_events (employee_id, event_type, event_time, source, comment, created_by)
            VALUES ($1, $2, $3, $4, $5, $6) RETURNING id""",
@@ -234,4 +280,4 @@ def period_bounds(period, reference=None):
         return reference - timedelta(days=reference.weekday()), reference
     if period == "month":
         return reference.replace(day=1), reference
-    raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Период должен быть day, week или month")
+    raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Период должен быть day, week или month")

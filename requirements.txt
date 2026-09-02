@@ -2,11 +2,9 @@ fastapi
 pydantic
 argon2-cffi
 email-validator
-uvicorn[standard]
+uvicorn
 asyncpg
 jinja2
-itsdangerous
-httpx
 openpyxl
 reportlab
 tzdata

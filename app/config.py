@@ -20,8 +20,7 @@ def env_bool(name, default):
     value = os.getenv(name)
     if value is None:
         return default
-    else:
-        return value.lower() in {"1", "true", "yes", "on"}
+    return value.lower() in {"1", "true", "yes", "on"}
 
 
 def env_int(name, default):

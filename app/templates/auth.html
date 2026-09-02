@@ -1,0 +1,58 @@
+{% set register = page == "register" -%}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0d1420">
+  <title>{{ "Регистрация" if register else "Вход" }} | Check Workerss</title>
+  <link rel="stylesheet" href="/static/css/auth.css">
+  <script src="/static/js/auth.js" defer></script>
+</head>
+<body data-page="{{ page }}">
+  <main class="auth-layout">
+    <section class="auth-showcase{% if register %} register-showcase{% endif %}">
+      <a class="auth-brand" href="/" aria-label="На главную"><span>✓</span> Check Workerss</a>
+
+      <div class="showcase-copy">
+        {% if register %}
+          <small>СОЗДАНИЕ АККАУНТА</small>
+          <h1>Безопасный доступ<br>для вашей команды</h1>
+          <p>Первый зарегистрированный пользователь становится администратором. Остальные аккаунты подтверждаются им.</p>
+        {% else %}
+          <small>ЗАКРЫТАЯ СИСТЕМА</small>
+          <h1>Рабочее время<br>под контролем</h1>
+          <p>Единая панель для администраторов, статистики посещений и отчётов.</p>
+        {% endif %}
+      </div>
+
+      {% if register %}
+        <div class="security-note"><span>⌁</span><div><strong>Контроль доступа</strong><small>Новые заявки не видят данные до одобрения</small></div></div>
+      {% else %}
+        <div class="security-note"><span>✓</span><div><strong>Защищённый доступ</strong><small>Максимально секьюрно</small></div></div>
+      {% endif %}
+    </section>
+
+    <section class="auth-form-side">
+      <button class="auth-theme" type="button" aria-label="Переключить тему">☾</button>
+
+      <form class="auth-form{% if register %} register-form{% endif %}" id="auth-form" novalidate>
+        {% if register %}
+          <header><span class="form-icon">＋</span><small>НОВЫЙ ПОЛЬЗОВАТЕЛЬ</small><h2>Регистрация</h2><p>Создайте рабочий аккаунт</p></header>
+        {% else %}
+          <header><span class="form-icon">↗</span><small>ДОБРО ПОЖАЛОВАТЬ</small><h2>Вход в систему</h2><p>Введите данные вашего рабочего аккаунта</p></header>
+        {% endif %}
+        <div class="form-alert" id="form-alert" hidden></div>
+
+        {% if register %}<label>Имя и фамилия<input name="full_name" autocomplete="name" placeholder="Иван Петров" minlength="3" required></label>{% endif %}
+        <label>Email<input name="email" type="email" autocomplete="username" placeholder="name@company.ru" required></label>
+        <label>Пароль<div class="password-field"><input name="password" type="password" autocomplete="{{ "new-password" if register else "current-password" }}" placeholder="{{ "Минимум 10 символов" if register else "Введите пароль" }}"{% if register %} minlength="10"{% endif %} required><button class="show-password" type="button" aria-label="Показать пароль">◉</button></div>{% if register %}<small class="field-hint">Заглавная и строчная буквы, цифра</small>{% endif %}</label>
+        {% if register %}<label>Повторите пароль<div class="password-field"><input name="password_confirm" type="password" autocomplete="new-password" placeholder="Повторите пароль" minlength="10" required><button class="show-password" type="button" aria-label="Показать пароль">◉</button></div></label>{% endif %}
+
+        <button class="submit-button" type="submit"><span>{{ "Создать аккаунт" if register else "Войти" }}</span><i>→</i></button>
+        {% if register %}<p class="auth-link">Уже есть аккаунт? <a href="/login">Войти</a></p>{% else %}<p class="auth-link">Нет аккаунта? <a href="/register">Зарегистрироваться</a></p>{% endif %}
+      </form>
+    </section>
+  </main>
+</body>
+</html>

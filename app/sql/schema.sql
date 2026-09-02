@@ -42,8 +42,6 @@ CREATE TABLE IF NOT EXISTS employees (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS employees_telegram_unique_idx ON employees(telegram_id) WHERE telegram_id IS NOT NULL;
-
 CREATE TABLE IF NOT EXISTS employee_schedules (
   id BIGSERIAL PRIMARY KEY,
   employee_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,

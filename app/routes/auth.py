@@ -33,7 +33,7 @@ async def update_admin_profile(
     if payload.new_password:
         password_errors = validate_password(payload.new_password)
         if password_errors:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, ". ".join(password_errors))
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, ". ".join(password_errors))
 
     pool = get_pool(request)
     password_hash = hash_password(payload.new_password) if payload.new_password else None
@@ -58,10 +58,10 @@ async def update_admin_profile(
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(payload: RegisterRequest, request: Request):
     if payload.password != payload.password_confirm:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Пароли не совпадают")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Пароли не совпадают")
     password_errors = validate_password(payload.password)
     if password_errors:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, ". ".join(password_errors))
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, ". ".join(password_errors))
     pool = get_pool(request)
     try:
         async with pool.acquire() as connection:

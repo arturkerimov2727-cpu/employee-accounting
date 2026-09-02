@@ -1,10 +1,18 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from asyncpg import UniqueViolationError
+from asyncpg import ForeignKeyViolationError, UniqueViolationError
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from ..dependencies import AuthContext, get_pool, require_csrf_roles, require_roles
-from ..services.attendance import attendance_days, ensure_default_schedule, record_attendance_event, write_audit
+from ..services.attendance import (
+    attendance_days,
+    ensure_default_schedule,
+    get_timezone,
+    record_attendance_event,
+    settings_map,
+    write_audit,
+)
 from app.schemas.schemas import SystemAction
 
 router = APIRouter(prefix="/api/system", tags=["system"])
@@ -14,7 +22,56 @@ def hired_at(value):
     try:
         return date.fromisoformat(value)
     except (TypeError, ValueError):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Некорректная дата приёма") from None
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Некорректная дата приёма") from None
+
+
+async def ensure_department(connection, department_id):
+    exists = await connection.fetchval(
+        "SELECT id FROM departments WHERE id=$1 FOR KEY SHARE",
+        department_id,
+    )
+    if not exists:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Отдел не найден")
+
+
+def validate_settings(current, incoming):
+    allowed = {"organization", "workday_start", "workday_end", "timezone"}
+    unknown = set(incoming) - allowed
+    if unknown:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Переданы неизвестные настройки")
+    if any(len(str(value)) > 500 for value in incoming.values()):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Значение настройки слишком длинное")
+
+    merged = {
+        "organization": current.get("organization", ""),
+        "workday_start": current.get("workday_start", "09:00"),
+        "workday_end": current.get("workday_end", "18:00"),
+        "timezone": current.get("timezone", "Europe/Moscow"),
+        **incoming,
+    }
+    organization = merged["organization"].strip()
+    if not organization:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Укажите название организации")
+    try:
+        starts_at = time.fromisoformat(merged["workday_start"])
+        ends_at = time.fromisoformat(merged["workday_end"])
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Некорректное рабочее время") from exc
+    if starts_at >= ends_at:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Конец рабочего дня должен быть позже начала")
+    try:
+        ZoneInfo(merged["timezone"])
+    except (ValueError, ZoneInfoNotFoundError) as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Некорректный часовой пояс") from exc
+
+    normalized = dict(incoming)
+    if "organization" in normalized:
+        normalized["organization"] = organization
+    if "workday_start" in normalized:
+        normalized["workday_start"] = starts_at.strftime("%H:%M")
+    if "workday_end" in normalized:
+        normalized["workday_end"] = ends_at.strftime("%H:%M")
+    return normalized
 
 async def snapshot(pool, user):
     employees = await pool.fetch(
@@ -48,18 +105,14 @@ async def snapshot(pool, user):
         pending_user_ids = await pool.fetch(
             "SELECT id FROM users WHERE status = 'pending' ORDER BY created_at DESC"
         )
-    setting_rows = await pool.fetch("SELECT key, value FROM settings")
-    settings = {row["key"]: row["value"] for row in setting_rows}
-    today = datetime.now().date()
-    dashboard_days = [
-        (await attendance_days(pool, employee["id"], today, today, settings.get("timezone")))[0]
-        for employee in employees
-    ]
+    settings = await settings_map(pool)
+    today = datetime.now(get_timezone(settings.get("timezone"))).date()
     month_start = today.replace(day=1)
     month_days = [
         await attendance_days(pool, employee["id"], month_start, today, settings.get("timezone"))
         for employee in employees
     ]
+    dashboard_days = [days[-1] for days in month_days]
     return {
         "employees": [{
             "id": row["id"], "fullName": row["full_name"], "departmentId": row["department_id"],
@@ -114,6 +167,7 @@ async def mutate_system(
                 if action == "createEmployee":
                     if not payload.fullName or not payload.departmentId:
                         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Укажите ФИО и отдел")
+                    await ensure_department(connection, payload.departmentId)
                     employee_hired_at = hired_at(payload.hiredAt or datetime.now().date().isoformat())
                     employee_id = await connection.fetchval(
                         """INSERT INTO employees (full_name, department_id, position, phone, email, birth_date, hired_at, telegram_id)
@@ -133,6 +187,7 @@ async def mutate_system(
                     )
                     if not before:
                         raise HTTPException(status.HTTP_404_NOT_FOUND, "Сотрудник не найден")
+                    await ensure_department(connection, payload.departmentId)
                     employee_hired_at = hired_at(payload.hiredAt)
                     result = await connection.execute(
                         """UPDATE employees SET full_name=$1, department_id=$2, position=$3, phone=$4, email=$5, birth_date=$6,
@@ -156,7 +211,9 @@ async def mutate_system(
                 elif action == "archiveEmployee":
                     if not payload.id:
                         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Не указан сотрудник")
-                    await connection.execute("UPDATE employees SET active=FALSE WHERE id=$1", payload.id)
+                    result = await connection.execute("UPDATE employees SET active=FALSE WHERE id=$1 AND active=TRUE", payload.id)
+                    if result.endswith(" 0"):
+                        raise HTTPException(status.HTTP_404_NOT_FOUND, "Сотрудник не найден")
                     await write_audit(connection, user.email, "ARCHIVE", "employee", payload.id, "Сотрудник перемещён в архив")
                 elif action == "createDepartment":
                     name = (payload.name or "").strip()
@@ -194,17 +251,19 @@ async def mutate_system(
                 elif action == "updateSettings":
                     if user.role != "admin":
                         raise HTTPException(status.HTTP_403_FORBIDDEN, "Настройки доступны только администратору")
-                    allowed = {"organization", "workday_start", "workday_end", "timezone"}
-                    for key, value in (payload.settings or {}).items():
-                        if key in allowed:
-                            await connection.execute(
-                                """INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, now())
-                                   ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()""",
-                                key, str(value),
-                            )
+                    current_settings = await settings_map(connection)
+                    normalized_settings = validate_settings(current_settings, payload.settings or {})
+                    for key, value in normalized_settings.items():
+                        await connection.execute(
+                            """INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, now())
+                               ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()""",
+                            key, value,
+                        )
                     await write_audit(connection, user.email, "UPDATE", "settings", None, "Обновлены настройки организации")
                 else:
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, "Неизвестное действие")
     except UniqueViolationError:
         raise HTTPException(status.HTTP_409_CONFLICT, "Такая запись уже существует") from None
+    except ForeignKeyViolationError:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Связанная запись не существует или уже используется") from None
     return await snapshot(pool, user)

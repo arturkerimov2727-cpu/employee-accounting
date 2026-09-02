@@ -3,18 +3,17 @@ import io
 from openpyxl import Workbook
 from openpyxl.chart import BarChart, PieChart, Reference
 from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 
 BLUE = "1D67CF"
 
 
-def column_letter(number):
-    result = ""
-    while number:
-        number, remainder = divmod(number - 1, 26)
-        result = chr(65 + remainder) + result
-    return result
+def safe_cell_value(value):
+    if isinstance(value, str) and value.startswith(("=", "+", "-", "@")):
+        return "'" + value
+    return value
 
 
 def total_formula(column, first_row, last_row):
@@ -54,19 +53,19 @@ def create_excel_report(period, headings, values):
 
     for row_number, value in enumerate(values, start=first_data_row):
         for column, item in enumerate(value, start=1):
-            sheet.cell(row_number, column, item)
+            sheet.cell(row_number, column, safe_cell_value(item))
         sheet.cell(row_number, last_column, f"=D{row_number}/60")
         sheet.cell(row_number, last_column).number_format = "0.0"
 
     sheet.freeze_panes = "A3"
-    sheet.auto_filter.ref = f"A2:{column_letter(last_column)}{max(2, last_data_row)}"
+    sheet.auto_filter.ref = f"A2:{get_column_letter(last_column)}{max(2, last_data_row)}"
     if values:
-        table = Table(displayName="AttendanceReport", ref=f"A2:{column_letter(last_column)}{last_data_row}")
+        table = Table(displayName="AttendanceReport", ref=f"A2:{get_column_letter(last_column)}{last_data_row}")
         table.tableStyleInfo = TableStyleInfo(name="TableStyleMedium2", showRowStripes=True)
         sheet.add_table(table)
 
     for column in range(1, last_column + 1):
-        letter = column_letter(column)
+        letter = get_column_letter(column)
         width = max(len(str(sheet.cell(row, column).value or "")) for row in range(1, max(2, last_data_row) + 1)) + 2
         sheet.column_dimensions[letter].width = min(30, max(12, width))
     sheet.row_dimensions[1].height = 26
@@ -84,7 +83,7 @@ def create_excel_report(period, headings, values):
     metrics = [
         ("Сотрудников в отчёте", f"=COUNTA('Посещаемость'!A{first_data_row}:A{last_data_row})" if values else "=0"),
         ("Всего смен", total_formula("C", first_data_row, last_data_row)),
-        ("Рабочих часов", f"=SUM('Посещаемость'!{column_letter(last_column)}{first_data_row}:{column_letter(last_column)}{last_data_row})" if values else "=0"),
+        ("Рабочих часов", f"=SUM('Посещаемость'!{get_column_letter(last_column)}{first_data_row}:{get_column_letter(last_column)}{last_data_row})" if values else "=0"),
         ("Опозданий", total_formula("E", first_data_row, last_data_row)),
         ("Минут опозданий", total_formula("F", first_data_row, last_data_row)),
         ("Ранних уходов", total_formula("G", first_data_row, last_data_row)),
@@ -99,22 +98,22 @@ def create_excel_report(period, headings, values):
     summary["A14"] = "Отдел"
     summary["B14"] = "Рабочие часы"
     style_header(summary[14][:2])
-    departments = sorted({str(row[1] or "Без отдела") for row in values})
+    department_hours = {}
+    for row in values:
+        department = str(row[1] or "Без отдела")
+        department_hours[department] = department_hours.get(department, 0) + (row[3] or 0) / 60
+    departments = sorted(department_hours)
     for row_number, department in enumerate(departments, start=15):
-        summary.cell(row_number, 1, department)
-        summary.cell(
-            row_number,
-            2,
-            f'=SUMIF(\'Посещаемость\'!$B${first_data_row}:$B${last_data_row},A{row_number},\'Посещаемость\'!${column_letter(last_column)}${first_data_row}:${column_letter(last_column)}${last_data_row})',
-        )
+        summary.cell(row_number, 1, safe_cell_value(department))
+        summary.cell(row_number, 2, department_hours[department])
         summary.cell(row_number, 2).number_format = "0.0"
 
     summary["D3"] = "Сотрудник"
     summary["E3"] = "Рабочие часы"
     style_header(summary[3][3:5])
-    for row_number, source_row in enumerate(range(first_data_row, last_data_row + 1), start=4):
-        summary.cell(row_number, 4, f"='Посещаемость'!A{source_row}")
-        summary.cell(row_number, 5, f"='Посещаемость'!{column_letter(last_column)}{source_row}")
+    for row_number, row in enumerate(values, start=4):
+        summary.cell(row_number, 4, safe_cell_value(row[0]))
+        summary.cell(row_number, 5, (row[3] or 0) / 60)
         summary.cell(row_number, 5).number_format = "0.0"
 
     summary.column_dimensions["A"].width = 26
